@@ -238,18 +238,18 @@ hand-made fixture. The real shipped fixture is produced by US2's real run (T031)
 
 ### Tests for User Story 3 ⚠️ (write first, must fail)
 
-- [ ] T024 [P] [US3] Add place-lookup unit tests to `tests/unit/stations/test_build.py`. `place_index_rows(gazetteer, located)`:
+- [X] T024 [P] [US3] Add place-lookup unit tests to `tests/unit/stations/test_build.py`. `place_index_rows(gazetteer, located)`:
   - includes every main-name place with population > 0, plus every place matched by a station (even with population 0);
   - adds an alternate-name row only for a place matched through an alternate name, and only when no main name already uses that `(normalised name, state)` key (research R3);
   - has exactly one row per key;
   - orders rows by `(state, normalised_name)`;
   - uses the columns `normalised_name, display_name, state, lat, lng, population`, with lat/lng as source text.
-- [ ] T025 [P] [US3] Add tests to `tests/unit/stations/test_export.py`. `write_places_gz(rows, path)`:
+- [X] T025 [P] [US3] Add tests to `tests/unit/stations/test_export.py`. `write_places_gz(rows, path)`:
   - the gzip header has `mtime == 0` and no filename;
   - the content is a UTF-8 CSV with `\n` line endings;
   - two writes produce identical bytes;
   - writes go through a temp file and `os.replace`.
-- [ ] T026 [US3] Extend `tests/integration/test_build_station_data.py`:
+- [X] T026 [US3] Extend `tests/integration/test_build_station_data.py`:
   - a happy-path run also writes the place lookup;
   - the report includes `Places index N places, X.X MB`;
   - the lookup bytes are identical across two runs;
@@ -258,15 +258,15 @@ hand-made fixture. The real shipped fixture is produced by US2's real run (T031)
 
 ### Implementation for User Story 3
 
-- [ ] T027 [US3] Implement `place_index_rows(gazetteer, located) -> list[PlaceIndexRow]` in `stations/pipeline/build.py` (per T024). Add `places_index` to `BuildResult`.
-- [ ] T028 [P] [US3] Implement `write_places_gz(rows, path)` in `stations/pipeline/export.py`:
+- [X] T027 [US3] Implement `place_index_rows(gazetteer, located) -> list[PlaceIndexRow]` in `stations/pipeline/build.py` (per T024). Add `places_index` to `BuildResult`.
+- [X] T028 [P] [US3] Implement `write_places_gz(rows, path)` in `stations/pipeline/export.py`:
   - `gzip.GzipFile(filename="", mode="wb", fileobj=…, mtime=0)` wrapping a `csv.writer(lineterminator="\n")`;
   - write to a temp file, then `os.replace`.
-- [ ] T029 [US3] Wire the place lookup into the rebuild service `stations/services/station_data.py` (the command needs no change beyond printing the report):
+- [X] T029 [US3] Wire the place lookup into the rebuild service `stations/services/station_data.py` (the command needs no change beyond printing the report):
   - write it to a temp file inside the atomic block (skipped with `--no-export`);
   - `os.replace` it onto `data/places/us_places.csv.gz` after commit;
   - pass `places_info` (count, MB) to `format_report`.
-- [ ] T030 [US3] Run `python -m pytest tests/unit/stations tests/integration`. Fix until green.
+- [X] T030 [US3] Run `python -m pytest tests/unit/stations tests/integration`. Fix until green.
 
 **Checkpoint**: all three stories work on the samples.
 

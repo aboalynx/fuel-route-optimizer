@@ -1,6 +1,7 @@
 """T017: the build_station_data command end to end, on the sample files."""
 
 import csv
+import gzip
 from decimal import Decimal
 from io import StringIO
 
@@ -172,3 +173,48 @@ def test_skip_osm_is_a_no_op(run, out_dirs):
     run(skip_osm=True)
 
     assert snapshot(out_dirs) == before
+
+
+# --- place lookup (US3, T026) ---------------------------------------------------------------
+
+
+def place_lookup_rows(path):
+    with gzip.open(path, "rt", encoding="utf-8", newline="") as f:
+        return list(csv.reader(f))
+
+
+def test_happy_path_writes_the_place_lookup(run, out_dirs):
+    stdout = run()
+
+    rows = place_lookup_rows(out_dirs.places)
+    assert rows[0] == ["normalised_name", "display_name", "state", "lat", "lng", "population"]
+    assert ["saint louis", "Saint Louis", "MO", "38.62727", "-90.19789", "301578"] in rows
+    assert len(rows) == 1 + 8
+    assert "Places index 8 places, 0.0 MB" in stdout
+
+
+def test_place_lookup_bytes_are_identical_across_runs(run, out_dirs):
+    run()
+    first = out_dirs.places.read_bytes()
+    run()
+
+    assert out_dirs.places.read_bytes() == first
+
+
+def test_no_export_writes_no_place_lookup(run, out_dirs):
+    stdout = run(no_export=True)
+
+    assert not out_dirs.places.exists()
+    assert "Places index" not in stdout
+
+
+def test_failures_leave_the_place_lookup_unchanged(run, out_dirs, fixtures_dir):
+    run()
+    before = out_dirs.places.read_bytes()
+
+    with pytest.raises(CommandError):
+        run(csv=fixtures_dir / "sample_fuel_bad.csv")
+    with pytest.raises(CommandError):
+        run(min_geocoded_pct=95)
+
+    assert out_dirs.places.read_bytes() == before

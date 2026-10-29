@@ -5,7 +5,8 @@ from decimal import Decimal
 import pytest
 
 from stations.enums import MatchVia
-from stations.pipeline.build import assign_price_ids, build, format_report
+from stations.pipeline.build import assign_price_ids, build, format_report, place_index_rows
+from stations.pipeline.geonames import load_gazetteer, normalise_place_name
 
 
 @pytest.fixture
@@ -74,3 +75,74 @@ def test_report_formats_thousands_and_decimal_threshold(result):
     report = format_report(result, Decimal("92.5"), "x.csv")
 
     assert "threshold 92.5%" in report
+
+
+# --- place lookup (US3, T024) ---------------------------------------------------------------
+
+
+def place_rows(fixtures_dir, result):
+    gazetteer = load_gazetteer(fixtures_dir / "sample_geonames.txt")
+    return place_index_rows(gazetteer, result.located)
+
+
+def test_place_index_has_populated_and_matched_places(fixtures_dir, result):
+    rows = place_rows(fixtures_dir, result)
+
+    assert [(r.state, r.normalised_name) for r in rows] == [
+        ("IL", "mclean"),
+        ("IL", "springfield"),
+        ("KS", "hometown"),  # alternate-name row: a station matched "Hometown" via New Hometown
+        ("KS", "new hometown"),
+        ("MO", "kansas city"),  # population > 0, no station needed
+        ("MO", "saint louis"),
+        ("TX", "fort worth"),
+        ("TX", "tinyville"),  # population 0, but a station matched it
+    ]
+
+
+def test_place_index_row_columns(fixtures_dir, result):
+    rows = {(r.state, r.normalised_name): r for r in place_rows(fixtures_dir, result)}
+
+    springfield = rows[("IL", "springfield")]
+    assert (springfield.display_name, springfield.lat, springfield.lng, springfield.population) == (
+        "Springfield",
+        "39.80172",
+        "-89.64371",
+        114394,
+    )
+    assert rows[("KS", "hometown")].display_name == "New Hometown"
+
+
+def test_place_index_matches_station_coordinates(fixtures_dir, result):
+    rows = {(r.state, r.normalised_name): r for r in place_rows(fixtures_dir, result)}
+
+    for item in result.located:
+        key = (item.station.state, normalise_place_name(item.station.city))
+        assert (rows[key].lat, rows[key].lng) == (item.place.lat_text, item.place.lng_text)
+
+
+def test_place_index_one_row_per_key_and_main_name_wins(tmp_path):
+    path = tmp_path / "US.txt"
+    lines = [
+        ("1", "Alpha", "", "TX", "10"),
+        ("2", "Beta", "Alpha,Gamma", "TX", "1000"),
+        ("3", "Zero Town", "", "TX", "0"),
+    ]
+    path.write_text(
+        "".join(
+            "\t".join([gid, name, name, alt, "30.0", "-97.0", "P", "PPL", "US", "", st]
+                      + ["", "", "", pop, "", "100", "America/Chicago", "2024-01-01"]) + "\n"
+            for gid, name, alt, st, pop in lines
+        ),
+        encoding="utf-8",
+    )  # fmt: skip
+
+    rows = place_index_rows(load_gazetteer(path), [])
+
+    keys = [(r.state, r.normalised_name) for r in rows]
+    assert keys == [("TX", "alpha"), ("TX", "beta")]  # no alternate rows, no population-0 place
+    assert rows[0].display_name == "Alpha"  # the main name, not Beta's alternate
+
+
+def test_build_result_carries_the_place_index(result):
+    assert len(result.places_index) == 8

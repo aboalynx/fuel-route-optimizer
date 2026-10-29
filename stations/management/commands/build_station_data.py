@@ -33,7 +33,7 @@ class Command(BaseCommand):
         parser.add_argument(
             "--no-export",
             action="store_true",
-            help="Store in the database but do not write the fixture.",
+            help="Store in the database but do not write the fixture or the place lookup.",
         )
         parser.add_argument(
             "--skip-osm",
@@ -61,6 +61,7 @@ class Command(BaseCommand):
                 export=not options["no_export"],
                 fixture_out=Path(options["fixture_out"]),
                 unmatched_out=Path(options["unmatched_out"]),
+                places_out=Path(options["places_out"]),
             )
         except (PriceFileError, GazetteerMissing) as error:
             raise CommandError(str(error)) from error

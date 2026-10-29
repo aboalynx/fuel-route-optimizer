@@ -5,8 +5,8 @@ Run phases (research R7), so a failure never leaves partial data:
 2. unmatched CSV       - always written once the build succeeds (it is what you fix)
 3. threshold check     - raises LocatedShareTooLow; DB and fixture untouched
 4. atomic DB write     - delete, insert stations, insert prices with explicit ids,
-                         dump the fixture to a temp file on the same connection
-5. after the block     - swap the temp fixture into place
+                         dump the fixture and the place lookup to temp files
+5. after the block     - swap the temp files into place
 """
 
 import os
@@ -20,7 +20,9 @@ from django.db import transaction
 from stations.enums import GeoSource
 from stations.models import FuelPrice, FuelStation
 from stations.pipeline.build import BuildResult, assign_price_ids, build, format_report
-from stations.pipeline.export import temp_path_for, write_unmatched_csv
+from stations.pipeline.export import places_gz_bytes, temp_path_for, write_unmatched_csv
+
+BYTES_PER_MB = 1_000_000
 
 
 class LocatedShareTooLow(Exception):
@@ -48,16 +50,19 @@ def rebuild_station_data(
     export: bool,
     fixture_out: Path,
     unmatched_out: Path,
+    places_out: Path,
 ) -> RebuildOutcome:
     result = build(csv_path, geonames_path)
 
     write_unmatched_csv(result.unmatched, unmatched_out)
-    report_text = format_report(result, min_geocoded_pct, _display(unmatched_out))
+    unmatched_display = _display(unmatched_out)
 
     if not result.meets_threshold(min_geocoded_pct):
+        report_text = format_report(result, min_geocoded_pct, unmatched_display)
         raise LocatedShareTooLow(result, min_geocoded_pct, report_text)
 
-    fixture_tmp = temp_path_for(fixture_out)
+    fixture_tmp, places_tmp = temp_path_for(fixture_out), temp_path_for(places_out)
+    places_info = None
     try:
         with transaction.atomic():
             _store(result)
@@ -71,11 +76,18 @@ def rebuild_station_data(
                     output=str(fixture_tmp),
                     verbosity=0,
                 )
+                places = places_gz_bytes(result.places_index)
+                Path(places_out).parent.mkdir(parents=True, exist_ok=True)
+                places_tmp.write_bytes(places)
+                places_info = (len(result.places_index), len(places) / BYTES_PER_MB)
         if export:
             os.replace(fixture_tmp, fixture_out)
+            os.replace(places_tmp, places_out)
     finally:
         fixture_tmp.unlink(missing_ok=True)
+        places_tmp.unlink(missing_ok=True)
 
+    report_text = format_report(result, min_geocoded_pct, unmatched_display, places_info)
     return RebuildOutcome(result=result, report_text=report_text)
 
 

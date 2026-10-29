@@ -3,14 +3,14 @@
 Money stays Python Decimal throughout: no price arithmetic happens anywhere else.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import Decimal
 from fractions import Fraction
 from pathlib import Path
 
 from stations.enums import GeoSource, MatchVia
 from stations.pipeline.clean import PriceRow, StationRecord, group_stations, read_price_rows
-from stations.pipeline.geonames import Place, load_gazetteer
+from stations.pipeline.geonames import Gazetteer, Place, load_gazetteer, normalise_place_name
 
 
 @dataclass(frozen=True)
@@ -21,12 +21,25 @@ class LocatedStation:
 
 
 @dataclass(frozen=True)
+class PlaceIndexRow:
+    """One row of the shipped place lookup used to resolve "City, ST" input."""
+
+    normalised_name: str
+    display_name: str
+    state: str
+    lat: str  # source text, byte-stable
+    lng: str
+    population: int
+
+
+@dataclass(frozen=True)
 class BuildResult:
     rows_read: int
     canadian_rows: int
     us_price_rows: int
     located: list[LocatedStation]  # sorted by opis_id
     unmatched: list[StationRecord]  # sorted by opis_id
+    places_index: list[PlaceIndexRow] = field(default_factory=list)
 
     @property
     def stations_kept(self) -> int:
@@ -87,6 +100,43 @@ def build(csv_path: Path, geonames_path: Path) -> BuildResult:
         us_price_rows=len(price_file.rows),
         located=located,
         unmatched=unmatched,
+        places_index=place_index_rows(gazetteer, located),
+    )
+
+
+def place_index_rows(gazetteer: Gazetteer, located: list[LocatedStation]) -> list[PlaceIndexRow]:
+    """Exactly one row per (normalised name, state), ordered by (state, normalised name).
+
+    - every main-name key of a place with population > 0;
+    - every main-name key of a place a station matched (even with population 0);
+    - an alternate-name row for a place matched through that alternate name, only when no
+      main name already uses the key (a main name always wins).
+    """
+    matched_ids = {item.place.geonameid for item in located}
+    rows: dict[tuple[str, str], PlaceIndexRow] = {}
+
+    for (name, state), place in gazetteer.primary.items():
+        if place.population > 0 or place.geonameid in matched_ids:
+            rows[(state, name)] = _index_row(name, place)
+
+    for item in located:
+        if item.via is MatchVia.ALTERNATE:
+            name = normalise_place_name(item.station.city)
+            key = (item.station.state, name)
+            if (name, item.station.state) not in gazetteer.primary:
+                rows.setdefault(key, _index_row(name, item.place))
+
+    return [rows[key] for key in sorted(rows)]
+
+
+def _index_row(normalised_name: str, place: Place) -> PlaceIndexRow:
+    return PlaceIndexRow(
+        normalised_name=normalised_name,
+        display_name=place.name,
+        state=place.state,
+        lat=place.lat_text,
+        lng=place.lng_text,
+        population=place.population,
     )
 
 

@@ -5,35 +5,47 @@ leaves a half-written file behind.
 """
 
 import csv
+import gzip
+import io
 import os
-from collections.abc import Callable, Iterable
+from collections.abc import Iterable
 from pathlib import Path
-from typing import TextIO
 
+from stations.pipeline.build import PlaceIndexRow
 from stations.pipeline.clean import StationRecord
 
 UNMATCHED_HEADER = ["opis_id", "name", "city", "state"]
+PLACES_HEADER = ["normalised_name", "display_name", "state", "lat", "lng", "population"]
 
 
 def write_unmatched_csv(stations: Iterable[StationRecord], path: Path) -> None:
     """Unmatched stations ordered by opis_id, UTF-8, '\\n' line endings."""
-
-    def write(f: TextIO) -> None:
-        writer = csv.writer(f, lineterminator="\n")
-        writer.writerow(UNMATCHED_HEADER)
-        for station in sorted(stations, key=lambda s: s.opis_id):
-            writer.writerow([station.opis_id, station.name, station.city, station.state])
-
-    write_text_atomically(path, write)
+    rows = [[s.opis_id, s.name, s.city, s.state] for s in sorted(stations, key=lambda s: s.opis_id)]
+    write_bytes_atomically(path, _csv_bytes(UNMATCHED_HEADER, rows))
 
 
-def write_text_atomically(path: Path, write: Callable[[TextIO], None]) -> None:
+def places_gz_bytes(rows: Iterable[PlaceIndexRow]) -> bytes:
+    """The gzipped place lookup; mtime 0 and no stored filename, so bytes depend on content only."""
+    csv_bytes = _csv_bytes(
+        PLACES_HEADER,
+        ([r.normalised_name, r.display_name, r.state, r.lat, r.lng, r.population] for r in rows),
+    )
+    buffer = io.BytesIO()
+    with gzip.GzipFile(filename="", mode="wb", fileobj=buffer, mtime=0) as gz:
+        gz.write(csv_bytes)
+    return buffer.getvalue()
+
+
+def write_places_gz(rows: Iterable[PlaceIndexRow], path: Path) -> None:
+    write_bytes_atomically(path, places_gz_bytes(rows))
+
+
+def write_bytes_atomically(path: Path, data: bytes) -> None:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = temp_path_for(path)
     try:
-        with open(tmp, "w", newline="", encoding="utf-8") as f:
-            write(f)
+        tmp.write_bytes(data)
         os.replace(tmp, path)
     finally:
         tmp.unlink(missing_ok=True)
@@ -41,3 +53,11 @@ def write_text_atomically(path: Path, write: Callable[[TextIO], None]) -> None:
 
 def temp_path_for(path: Path) -> Path:
     return Path(path).with_name(Path(path).name + ".tmp")
+
+
+def _csv_bytes(header: list[str], rows: Iterable[list]) -> bytes:
+    text = io.StringIO(newline="")
+    writer = csv.writer(text, lineterminator="\n")
+    writer.writerow(header)
+    writer.writerows(rows)
+    return text.getvalue().encode("utf-8")
