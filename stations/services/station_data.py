@@ -51,8 +51,9 @@ def rebuild_station_data(
     fixture_out: Path,
     unmatched_out: Path,
     places_out: Path,
+    rejected_matches_path: Path | None = None,
 ) -> RebuildOutcome:
-    result = build(csv_path, geonames_path)
+    result = build(csv_path, geonames_path, rejected_matches_path)
 
     write_unmatched_csv(result.unmatched, unmatched_out)
     unmatched_display = _display(unmatched_out)

@@ -6,6 +6,7 @@ from stations.enums import MatchVia
 from stations.pipeline.geonames import (
     GAZETTEER_URL,
     GazetteerMissing,
+    compact_place_name,
     load_gazetteer,
     normalise_place_name,
 )
@@ -105,3 +106,86 @@ def test_missing_gazetteer_names_path_and_download_url(tmp_path):
     assert str(missing) in str(exc.value)
     assert GAZETTEER_URL == "https://download.geonames.org/export/dump/US.zip"
     assert GAZETTEER_URL in str(exc.value)
+
+
+# --- compact tier ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("raw", "compact"),
+    [
+        ("De Forest", "deforest"),
+        ("DeForest", "deforest"),
+        ("Brook Park", "brookpark"),
+        ("Brookpark", "brookpark"),
+        ("Bois D'Arc", "boisdarc"),
+        ("Bois D Arc", "boisdarc"),
+        ("S Coffeyville", "southcoffeyville"),
+        ("South Coffeyville", "southcoffeyville"),
+        ("N. Little Rock", "northlittlerock"),
+        ("E", "east"),
+        ("Saint Louis", "saintlouis"),
+        ("St Louis", "saintlouis"),
+    ],
+)
+def test_compact_place_name(raw, compact):
+    assert compact_place_name(raw) == compact
+
+
+def test_compact_only_expands_a_leading_direction_token():
+    assert compact_place_name("Rock S") == "rocks"
+
+
+def test_compact_tier_matches_spacing_differences(fixtures_dir):
+    gazetteer = load_gazetteer(fixtures_dir / "sample_geonames.txt")
+
+    place, via = gazetteer.lookup("De Forest", "WI")
+    assert (place.name, via) == ("DeForest", MatchVia.COMPACT)
+    place, via = gazetteer.lookup("Brookpark", "OH")
+    assert (place.name, via) == ("Brook Park", MatchVia.COMPACT)
+
+
+def write_gazetteer(tmp_path, rows):
+    path = tmp_path / "US.txt"
+    path.write_text("".join(geonames_line(*row) + "\n" for row in rows), encoding="utf-8")
+    return path
+
+
+def test_lookup_order_main_then_alternate_then_compact(tmp_path):
+    path = write_gazetteer(
+        tmp_path,
+        [
+            (1, "DeForest", "", "P", "PPL", "WI", 10000),  # compact key "deforest"
+            (2, "Other Town", "De Forest", "P", "PPL", "WI", 5),  # alternate "de forest"
+        ],
+    )
+
+    place, via = load_gazetteer(path).lookup("De Forest", "WI")
+    assert (place.geonameid, via) == (2, MatchVia.ALTERNATE)  # compact never overrides
+
+
+def test_main_name_beats_compact(tmp_path):
+    path = write_gazetteer(
+        tmp_path,
+        [
+            (1, "DeForest", "", "P", "PPL", "WI", 10000),
+            (3, "De Forest", "", "P", "PPL", "WI", 1),
+        ],
+    )
+
+    place, via = load_gazetteer(path).lookup("De Forest", "WI")
+    assert (place.geonameid, via) == (3, MatchVia.PRIMARY)
+
+
+def test_compact_tier_uses_main_names_only_and_the_tie_rule(tmp_path):
+    path = write_gazetteer(
+        tmp_path,
+        [
+            (1, "Somewhere", "Brook Park", "P", "PPL", "OH", 100000),  # alternate only: ignored
+            (2, "Brook Park", "", "P", "PPL", "OH", 500),
+            (4, "Brook-Park", "", "P", "PPL", "OH", 500),  # same compact key, higher id
+        ],
+    )
+
+    place, via = load_gazetteer(path).lookup("Brookpark", "OH")
+    assert (place.geonameid, via) == (2, MatchVia.COMPACT)

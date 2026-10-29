@@ -6,7 +6,8 @@ from decimal import Decimal
 
 import pytest
 
-from stations.pipeline.build import PlaceIndexRow
+from stations.enums import UnmatchedReason
+from stations.pipeline.build import PlaceIndexRow, UnmatchedStation
 from stations.pipeline.clean import StationRecord
 from stations.pipeline.export import write_places_gz, write_unmatched_csv
 
@@ -24,9 +25,13 @@ def station(opis_id, name, city, state):
 
 
 STATIONS = [
-    station(300, "ZED STOP", "Zed", "KS"),
-    station(106, "GHOST GAS, INC", "Nowhereville", "KS"),
-    station(42, "ÉCOLE FUEL", "Montréal Ville", "VT"),
+    UnmatchedStation(station(300, "ZED STOP", "Zed", "KS"), UnmatchedReason.NOT_FOUND),
+    UnmatchedStation(
+        station(106, "GHOST GAS, INC", "Nowhereville", "KS"), UnmatchedReason.NOT_FOUND
+    ),
+    UnmatchedStation(
+        station(42, "ÉCOLE FUEL", "Willington", "CT"), UnmatchedReason.REJECTED, "Millington"
+    ),
 ]
 
 
@@ -36,10 +41,10 @@ def test_header_order_and_line_endings(tmp_path):
     write_unmatched_csv(STATIONS, path)
 
     assert path.read_bytes().decode("utf-8") == (
-        "opis_id,name,city,state\n"
-        "42,ÉCOLE FUEL,Montréal Ville,VT\n"
-        '106,"GHOST GAS, INC",Nowhereville,KS\n'
-        "300,ZED STOP,Zed,KS\n"
+        "opis_id,name,city,state,reason\n"
+        "42,ÉCOLE FUEL,Willington,CT,rejected match: Millington\n"
+        '106,"GHOST GAS, INC",Nowhereville,KS,not found\n'
+        "300,ZED STOP,Zed,KS,not found\n"
     )
 
 

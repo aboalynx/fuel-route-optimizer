@@ -44,8 +44,10 @@ One raw US row of the price file, kept for traceability.
 | `StationRecord` | `opis_id`, `name`, `address`, `city`, `state`, `best_price: Decimal`, `rows: list[PriceRow]` | `clean.group_stations()` |
 | `Place` | `geonameid: int`, `name: str`, `state: str`, `lat_text: str`, `lng_text: str`, `population: int` | `geonames.load_gazetteer()` |
 | `Gazetteer` | `primary: dict[(norm, state), Place]`, `alternate: dict[(norm, state), Place]` | `geonames.load_gazetteer()` |
-| `LocatedStation` | `station: StationRecord`, `place: Place`, `via: "primary" \| "alternate"` | `build.locate()` |
-| `BuildResult` | `located: list[LocatedStation]`, `unmatched: list[StationRecord]`, `canadian_rows: int`, `rows_read: int`, `places_index: list[PlaceIndexRow]` | `build.build()` |
+| `LocatedStation` | `station: StationRecord`, `place: Place`, `via: MatchVia` (`PRIMARY`, `ALTERNATE`, `COMPACT`) | `build.build()` |
+| `UnmatchedStation` | `station: StationRecord`, `reason: UnmatchedReason` (`NOT_FOUND` = "not found", `REJECTED` = "rejected match"), `matched_name: str \| None`; `reason_text` = "not found" or "rejected match: <matched_name>" | `build.build()` |
+| `RejectedMatches` | set of (normalised city, state, normalised matched name), loaded from `data/overrides/rejected_matches.csv` | `overrides.load_rejected_matches()` |
+| `BuildResult` | `located: list[LocatedStation]`, `unmatched: list[UnmatchedStation]`, `canadian_rows: int`, `rows_read: int`, `places_index: list[PlaceIndexRow]` | `build.build()` |
 
 ## Lifecycle of one rebuild
 

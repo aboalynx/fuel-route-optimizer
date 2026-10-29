@@ -29,7 +29,15 @@ _GEO_SOURCE_LABELS = {
 
 
 class MatchVia(StrEnum):
-    """Which gazetteer name located a station: the main name, or an alternate as a fallback."""
+    """Which lookup tier located a station, tried in this order."""
 
-    PRIMARY = "primary"
-    ALTERNATE = "alternate"
+    PRIMARY = "primary"  # main name
+    ALTERNATE = "alternate"  # alternate name, only if no main name matches
+    COMPACT = "compact"  # spaces removed, leading direction expanded; main names only
+
+
+class UnmatchedReason(StrEnum):
+    """Why a station was left out of the shipped data."""
+
+    NOT_FOUND = "not found"
+    REJECTED = "rejected match"  # on the reviewed rejected-matches list

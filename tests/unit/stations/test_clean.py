@@ -173,9 +173,9 @@ def test_error_message_lists_first_50_and_the_total(tmp_path):
 def test_canadian_rows_are_counted_not_reported(fixtures_dir):
     result = read_price_rows(fixtures_dir / "sample_fuel.csv")
 
-    assert result.rows_read == 19
+    assert result.rows_read == 21
     assert result.canadian_rows == 2
-    assert len(result.rows) == 17
+    assert len(result.rows) == 19
     assert not {row.state for row in result.rows} & CANADIAN_CODES
 
 
@@ -197,7 +197,7 @@ def test_group_stations_one_record_per_id_sorted(fixtures_dir):
 
     ids = [s.opis_id for s in stations]
     assert ids == sorted(ids)
-    assert len(ids) == len(set(ids)) == 13
+    assert len(ids) == len(set(ids)) == 15
 
 
 def test_group_stations_min_price_first_row_identity_and_all_rows(fixtures_dir):

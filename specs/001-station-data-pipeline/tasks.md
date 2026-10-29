@@ -276,28 +276,28 @@ hand-made fixture. The real shipped fixture is produced by US2's real run (T031)
 
 **Purpose**: Real data run, shipped artifacts, docs and the final checks
 
-- [ ] T031 Run on the real data: `time python manage.py build_station_data`. Expected:
+- [X] T031 Run on the real data: `time python manage.py build_station_data`. Expected:
   - report: 8,151 rows read, 620 Canadian dropped, 7,531 US price rows read, 6,626 stations kept, 568 with several prices, about 99.8% located (threshold 95%), about 13 dropped (research R1);
   - commit `stations/fixtures/stations.json`, `data/reports/unmatched_cities.csv` and `data/places/us_places.csv.gz`;
   - record the rebuild time and the machine.
-- [ ] T032 Check reproducibility on the real data, per quickstart §2: `shasum` the three outputs, rebuild, `diff` → identical. Then `time python manage.py loaddata stations` on a fresh DB; record the load time.
-- [ ] T033 [P] Update `README.md`:
+- [X] T032 Check reproducibility on the real data, per quickstart §2: `shasum` the three outputs, rebuild, `diff` → identical. Then `time python manage.py loaddata stations` on a fresh DB; record the load time.
+- [X] T033 [P] Update `README.md`:
   - **Status:** mark 001 done.
   - **"Data and assumptions":** the real report numbers from T031 replace the "TBD after feature 001" text, along with the unmatched-cities file path and the threshold used (95%).
   - **Timings:** measured load and rebuild times with the machine (e.g. "Load: N s. Full rebuild: N s (2018 Intel MacBook Pro)").
   - **Setup:** add `python manage.py loaddata stations`.
   - **"Data attribution":** GeoNames, CC BY 4.0, because the committed place lookup redistributes GeoNames data.
   - **Rebuild instructions:** download `US.zip` to `data/geonames/`, then `python manage.py build_station_data`.
-- [ ] T034 [P] Sync `docs/implementation-plan.md` Feature 001 with the spec and plan (plan.md "Plan document sync"):
+- [X] T034 [P] Sync `docs/implementation-plan.md` Feature 001 with the spec and plan (plan.md "Plan document sync"):
   - the unmatched-cities file is committed;
   - the conflicting city/state check;
   - the place-lookup ordering and the main-name-wins alternate rows;
   - `best_price` is computed in Python (no SQL price arithmetic).
-- [ ] T035 Run the coverage and quality gate:
+- [X] T035 Run the coverage and quality gate:
   - `python -m pytest --cov=stations --cov-report=term-missing` → ≥ 90% on `stations/pipeline/`;
   - `ruff check .` and `ruff format --check .` clean;
   - `python manage.py check` clean.
-- [ ] T036 Run the quickstart.md validation end to end (§1–§4), including both failure paths. Confirm `git status` shows no changes after the failure runs.
+- [X] T036 Run the quickstart.md validation end to end (§1–§4), including both failure paths. Confirm `git status` shows no changes after the failure runs.
   - A threshold failure rewrites `data/reports/unmatched_cities.csv` by design. It shows no change here only because the inputs, and so the bytes, are the same. A threshold test on the real data with different settings may change that one file, and that is expected.
 
 ---

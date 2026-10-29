@@ -12,7 +12,14 @@ marked *measured* come from a read-only feasibility scan of the real `data/geona
   - 6,597 matched by main name and 16 by alternate name, so **99.8% located**;
   - **13 unmatched**: `De Forest, WI` ×4, `Willow Beach, AZ` ×3, and one each of `Bois D Arc, MO`, `Pueblo Of Acoma, NM`, `Brookpark, OH`, `Crescent, PA`, `S Coffeyville, OK`, `Corinth, ME`.
 - **Rationale:** 99.8% is well above the 95% threshold. A fuzzy tier would add guessing (constitution I) for at most 13 stations.
-- **Alternatives considered:** a rapidfuzz fallback within the state (rejected: non-obvious matches, extra rules to explain). Ignoring spaces when comparing names (`De Forest` ↔ `DeForest`) would recover 4 stations. It is left as future work, so FR-009 stays exactly as specified.
+- **Alternatives considered:** a rapidfuzz fallback within the state (rejected: non-obvious matches, extra rules to explain).
+- **Update (2026-10-29): compact third tier added.** The 13 misses in `data/reports/unmatched_cities.csv` were reviewed. Seven of them are the same place written with different spacing, punctuation or a direction abbreviation:
+  - `De Forest, WI` ×4 (incl. TA Madison on I-39/90/94) vs GeoNames `DeForest`;
+  - `Bois D Arc` vs `Bois D'Arc`;
+  - `Brookpark` vs `Brook Park`;
+  - `S Coffeyville` vs `South Coffeyville`.
+  A third tier is used only when the main and alternate names both fail: compact key = the FR-009 normalised name, with a leading direction token expanded (n→north, s→south, e→east, w→west), then with all spaces removed, matched within the state against main names only, with the same tie rule, recorded as `MatchVia.COMPACT`. It is an exact key, not a fuzzy score, so it stays deterministic (constitution I).
+  - **Expected after the change:** 6 unmatched (`Willow Beach, AZ` ×3, `Pueblo Of Acoma, NM`, `Crescent, PA`, `Corinth, ME`), about 99.9% located. These six are not populated places in GeoNames (townships, a reservation, a marina area).
 
 ## R2. Gazetteer parsing
 
@@ -30,7 +37,8 @@ marked *measured* come from a read-only feasibility scan of the real `data/geona
 - **Decision (confirmed 2026-10-29):**
   - One winner per key: the highest population, then the lowest geonameid.
   - The main-name index and the alternate-name index are built separately.
-  - A **main name always wins**. An alternate-name row is added to the place lookup only when no main name already uses that `(normalised name, state)` key, and only for a place a station was matched through.
+  - A **main name always wins**. An alternate-name or compact-tier row is added to the place lookup under the station's normalised city key, only when no main name already uses that `(normalised name, state)` key, and only for a place a station was matched through.
+  - Lookup order: main name → alternate name → compact key (main names only). A later tier never overrides an earlier match.
 - **Measured:** 58,288 alternate keys collide with a main-name key, so the conflict is real.
 - **Rationale:** this keeps "exactly one row per (normalised name, state)" (FR-016). It also mirrors station matching, where the alternate name is used only when the main name misses, so `"City, ST"` lookups resolve exactly as station matching did.
 - **Status:** confirmed.
@@ -97,6 +105,21 @@ marked *measured* come from a read-only feasibility scan of the real `data/geona
   - `--skip-osm`: accepted but a no-op in this feature. It is the only behaviour until Feature 005, and accepting it now keeps the command contract stable.
 - **Missing gazetteer:** `CommandError` naming the expected path and the download URL (`https://download.geonames.org/export/dump/US.zip`).
 - **Rationale:** this is the standard Django entry point, so a reviewer finds it with `python manage.py help`.
+
+## R11. Reviewed rejected-matches list (FR-022)
+
+- **Decision:**
+  - A committed, hand-reviewed `data/overrides/rejected_matches.csv` (city, state, matched_name, reason).
+  - After lookup, a station whose (normalised city, state, normalised matched name) is listed becomes unmatched with reason `rejected match: <name>`.
+  - The list only rejects. It never supplies coordinates.
+  - The list is validated before anything is written. A missing file means no rejections.
+- **Measured cause:** a read-only review of all 16 alternate-name and 7 compact matches found one wrong match. `Willington, CT` (2 stations) matched `Millington` about 28 miles away. GeoNames has no populated place called Willington in CT, and Millington carries "Willington" as an alternate name.
+- **Rationale:** a wrong location is worse than a missing one. A wrong point would place the stations outside the I-84 corridor and inside unrelated corridors.
+- **Alternatives considered:**
+  - Ship as is, with a README note (rejected: knowingly ships wrong coordinates).
+  - A distance guard on alternate matches (rejected: there is no own-city point to measure from).
+  - An override list that supplies coordinates (rejected: hand-entered coordinates are unverifiable).
+  - Future work: GeoNames admin areas (class A/ADM3, towns and townships) as an extra tier before alternate names.
 
 ## R10. Testing approach (constitution IV)
 

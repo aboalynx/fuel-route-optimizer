@@ -399,26 +399,29 @@ missing, the command stops with a clear error naming the expected path and the d
        - OPIS ID or Rack ID missing or not an integer;
        - price empty, not a decimal, or ≤ 0;
        - empty City or State;
-       - a State that is neither US/DC nor Canadian.
+       - a State that is neither US/DC nor Canadian;
+       - a row that shares an OPIS ID with an earlier row but has a different City or State (`conflicts with line <n>`).
      - If there is any problem, raise one `CsvValidationError` listing the first 50 plus the total count. The command exits non-zero and nothing is written.
      - Canadian rows are valid and are dropped silently.
    - Drop Canadian rows by province code: AB, BC, MB, NB, NL, NS, NT, NU, ON, PE, QC, SK, YT.
    - Parse prices as `Decimal` from the raw string, never via float. Keep every digit (up to 8 dp). Store them in `DecimalField(max_digits=12, decimal_places=8)`.
-   - Group rows by OPIS ID. For each station: display name = first spelling seen; `best_price` = minimum price; keep every raw row.
+   - Group rows by OPIS ID. For each station: display name = first spelling seen; address, city and state from the first row; `best_price` = minimum price, computed in Python `Decimal` (never with SQL arithmetic); keep every raw row.
    - Return plain dataclasses: `StationRecord` with its list of `PriceRow`.
 2. **Gazetteer** (`stations/pipeline/geonames.py`, pure):
    - Stream-parse `US.txt`. It is tab-separated with no header. Columns used: 0 geonameid, 1 name, 2 asciiname, 3 alternatenames, 4 lat, 5 lng, 6 feature class, 7 feature code, 10 admin1 (= state), 14 population.
    - Keep feature class `P` only, and exclude PPLH, PPLQ and PPLW.
    - Normalise names with one `normalise_place_name()`, applied to both GeoNames names and CSV cities.
-   - Build the lookup `(normalised_name, state) → place`. Primary keys come from `name` and `asciiname`. Alternate names are used only as a fallback lookup.
+   - Build the lookup `(normalised_name, state) → place`. Tier 3 (compact key: normalised name, leading n/s/e/w expanded, spaces removed; main names only) is used only when main and alternate names both miss. Primary keys come from `name` and `asciiname`. Alternate names are used only as a fallback lookup.
    - Tie rule when several places share a key: highest population, then lowest geonameid.
 3. **Assign coordinates:**
    - Each station gets its city's centroid: `lat`, `lng`, `geo_source = GeoSource.CITY_CENTROID`, `match_score = null`.
-   - Unmatched stations are excluded from the tables and written to `data/reports/unmatched_cities.csv` (`opis_id, name, city, state`).
+   - Unmatched stations are excluded from the tables, together with their price rows, and written to `data/reports/unmatched_cities.csv` (`opis_id, name, city, state, reason`, ordered by `opis_id`; reason `not found` or `rejected match: <name>`). A committed, reviewed `data/overrides/rejected_matches.csv` (city, state, matched_name, reason) rejects known-wrong matches. It never supplies coordinates. That file is **committed**, so reviewers see every dropped station.
 4. **Places index:**
    - Export `data/places/us_places.csv.gz` (`normalised_name, display_name, state, lat, lng, population`).
    - Include feature class `P` places with population > 0, plus every place matched by a station city.
-   - Commit the file. Report its size; expect a few MB, far under GitHub's 100 MB limit.
+   - Exactly one row per `(normalised_name, state)`. A main name always wins: an alternate-name or compact-tier row is added under the station's normalised city key only for a place a station matched through that tier, and only when no main name already uses the key.
+   - Ordered by `(state, normalised_name)`; gzip with `mtime=0` and no stored filename, so the bytes are identical on every run.
+   - Commit the file. Report its size. Measured: 31,503 places, 0.6 MB.
 5. **Store:** inside `transaction.atomic()`:
    - delete all existing rows;
    - `bulk_create` stations sorted by `opis_id` (`opis_id` is the primary key);
@@ -434,7 +437,7 @@ missing, the command stops with a clear error naming the expected path and the d
    Rows read 8,151 | Canadian rows dropped 620 | US price rows 7,531
    Stations kept 6,626 | with several prices 568
    Stations located 6,5xx (9x.x%, threshold 95%) | city_centroid 100% | osm 0%
-   Stations dropped (city not found) nn -> data/reports/unmatched_cities.csv
+   Stations dropped nn (not found nn, rejected match nn) -> data/reports/unmatched_cities.csv
    Places index 2x,xxx places, x.x MB
    ```
 

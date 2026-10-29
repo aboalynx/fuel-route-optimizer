@@ -1,0 +1,2 @@
+city,state,matched_name,reason
+Hometown,KS,New Hometown,test: reject an alternate-name match

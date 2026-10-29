@@ -27,3 +27,16 @@ def test_enums_module_does_not_import_django():
             modules.add(node.module)
 
     assert not any(name.split(".")[0] == "django" for name in modules)
+
+
+def test_match_via_values():
+    from stations.enums import MatchVia
+
+    assert [m.value for m in MatchVia] == ["primary", "alternate", "compact"]
+
+
+def test_unmatched_reason_values():
+    from stations.enums import UnmatchedReason
+
+    assert UnmatchedReason.NOT_FOUND == "not found"
+    assert UnmatchedReason.REJECTED == "rejected match"

@@ -103,10 +103,12 @@ cities.
 - **What the provided file actually contains.**
   - Its cities never abbreviate Saint/Fort/Mount; 86 city/state pairs spell them out. The expansion rules therefore mainly normalise gazetteer names such as "St. Louis".
   - 9 cities use the "Mc X" form (e.g. "Mc Lean, IL", "MC DERMITT, NV").
-  - One city uses a direction abbreviation ("S Coffeyville, OK"). It is expected in the unmatched list unless an alternate name matches.
+  - One city uses a direction abbreviation ("S Coffeyville, OK"). It is matched by the compact tier ("South Coffeyville").
 - **Duplicate place names.** When several places in one state share a normalised name, the most populous one wins, and the lowest gazetteer ID breaks remaining ties.
 - **Defunct places.** Historical, abandoned or destroyed places in the gazetteer are never used.
 - **Alternate names.** An alternate place name is used only when no primary name matches, to avoid false matches.
+- **Wrong alternate-name matches.** `Willington, CT` matches `Millington` (about 28 miles away) through an alternate name. The rejected-matches list (FR-022) turns it into an unmatched station with an explicit reason.
+- **Spacing and punctuation differences.** "De Forest" vs GeoNames "DeForest", "Brookpark" vs "Brook Park" and "Bois D Arc" vs "Bois D'Arc" are matched by the compact tier, only when the main and alternate names both fail.
 - **Exact duplicate rows.** 81 IDs have rows with the same price. They become one station, and every raw row is kept.
 - **Malformed price file.** A malformed row (bad ID, bad or non-positive price, empty city/state, unknown state code) or a missing header column stops the rebuild before anything is written, with every problem listed (see FR-020).
 - **Gazetteer missing.** If the gazetteer file is not present when rebuilding, the command stops with a clear message saying where to get it. The shipped data is unaffected.
@@ -124,10 +126,10 @@ cities.
 - **FR-006**: The system MUST use the first name spelling seen in the file as the station's display name, and take the station's address, city and state from its first row. (Verified on the provided file: 0 IDs have rows with a different address, city or state.)
 - **FR-007**: The system MUST store prices exactly as given in the file (up to 8 decimal places), with no rounding at any stage of this feature.
 - **FR-008**: The system MUST give each station the coordinates of its city centre, found by matching (city, state) against an offline gazetteer of US populated places.
-- **FR-009**: The system MUST apply one name-normalisation rule to both gazetteer names and price-file cities: lower case; remove periods and apostrophes; hyphens to spaces; collapse spaces; expand st→saint, ste→sainte, ft→fort, mt→mount; join "mc x" into "mcx".
-- **FR-010**: The system MUST ignore historical, abandoned and destroyed places. It MUST resolve name collisions within a state by highest population, then lowest gazetteer ID. It MUST use alternate names only as a fallback when the primary name does not match.
+- **FR-009**: The system MUST apply one name-normalisation rule to both gazetteer names and price-file cities: lower case; remove periods and apostrophes; hyphens to spaces; collapse spaces; expand st→saint, ste→sainte, ft→fort, mt→mount; join "mc x" into "mcx". For the third lookup tier (FR-010) it MUST also derive a **compact key**: the normalised name with a leading direction token expanded (n→north, s→south, e→east, w→west), then with all spaces removed (e.g. "De Forest" → "deforest", "Bois D'Arc" and "Bois D Arc" → "boisdarc", "S Coffeyville" → "southcoffeyville").
+- **FR-010**: The system MUST ignore historical, abandoned and destroyed places. It MUST resolve name collisions within a state by highest population, then lowest gazetteer ID. Lookup MUST use three tiers, in this order, each within the same state: (1) main names; (2) alternate names, only when no main name matches; (3) the compact key against main names only (same tie rule), only when tiers 1 and 2 both fail. A later tier never overrides an earlier match. The tier used is recorded per station (main, alternate or compact).
 - **FR-011**: The system MUST record the coordinate source of every station as "city centre", and leave the match score empty (reserved for the later precision feature).
-- **FR-012**: The system MUST exclude stations whose city cannot be located, together with their price rows, and MUST write them (ID, name, city, state) to a reviewable unmatched-cities file. That file is committed with the shipped data, so reviewers can see every dropped station.
+- **FR-012**: The system MUST exclude stations whose city cannot be located, together with their price rows, and MUST write them (ID, name, city, state, reason) to a reviewable unmatched-cities file, ordered by station ID. The reason is "not found" or "rejected match: <matched name>" (FR-022). That file is committed with the shipped data, so reviewers can see every dropped station.
 - **FR-013**: The system MUST replace previously built data on every rebuild rather than adding to it. Two consecutive rebuilds on the same inputs MUST produce identical stored records, including record identifiers. All three output files MUST be byte-for-byte identical between runs: the station data file, the unmatched-cities file and the place lookup.
 - **FR-014**: The system MUST write each output in a fixed order:
   - the station data file (stations and their price rows, shipped and ready to load): ordered by station ID;
@@ -136,7 +138,7 @@ cities.
 - **FR-015**: Loading the shipped data MUST need one command and no network access, and MUST NOT need the gazetteer file.
 - **FR-016**: The system MUST export a compact, shipped place lookup (normalised name, display name, state, coordinates, population). It MUST cover every populated place with a known population, plus every place matched by a station city.
   - The lookup MUST have exactly one row per (normalised name, state): the winner of the FR-010 tie rule. Later "City, ST" lookups therefore resolve exactly as station matching did.
-  - A place matched through an alternate name MUST also get a row under that alternate name.
+  - A place matched through an alternate name or the compact tier MUST also get a row under the station's normalised city key, unless a main name already uses that key (a main name always wins).
 - **FR-017**: The rebuild MUST be a single command. It MUST accept these optional inputs:
   - the price file location (project default);
   - the gazetteer location (project default);
@@ -150,7 +152,7 @@ cities.
   - stations kept;
   - stations with several prices;
   - stations located (count and percentage, by coordinate source), with the threshold next to the share (e.g. "Stations located 96.8% (threshold 95%)");
-  - stations dropped (with the unmatched-file location);
+  - stations dropped, split into not found and rejected match (with the unmatched-file location);
   - the place lookup's size (places and megabytes).
 - **FR-019**: The rebuild MUST NOT make any network request.
 - **FR-020**: Before writing anything, the rebuild MUST validate the whole price file.
@@ -168,6 +170,12 @@ cities.
   - **Below the threshold:** print the report, write the unmatched-cities file, exit with a non-zero status, and leave the stored data and exported files exactly as they were.
   - **At or above the threshold:** save and export as normal.
   - **Lower threshold:** if the shipped data is built with a threshold below the default, the project documentation MUST state the value used and the reason.
+- **FR-022**: The system MUST apply a committed, reviewed rejected-matches list (`data/overrides/rejected_matches.csv`; columns city, state, matched_name, reason).
+  - **Why:** Willington, CT (stations 52623, 71659) matched Millington through an alternate name, about 28 miles from the real town; a wrong location is worse than a missing one.
+  - **Rule:** after lookup, a station whose (normalised city, state, normalised matched place name) is on the list is treated as unmatched, with reason "rejected match: <matched name>".
+  - **Rejects only:** the list never supplies coordinates.
+  - **Missing file:** no rejections.
+  - **Validation:** the list is validated before anything is written: exact header; non-empty city, matched name and reason; a US state code; no duplicate rows. Any problem stops the rebuild with one error that lists them all (as in FR-020).
 
 ### Key Entities
 

@@ -18,7 +18,8 @@ A single Django management command, `build_station_data`, rebuilds the station d
 6. Export three committed, byte-stable files: the Django fixture, the unmatched-cities CSV, and the gzipped place lookup.
 
 The algorithms live in pure modules under `stations/pipeline/`. The rebuild service `stations/services/station_data.py` runs them, stores the data and exports the files. The management command is a thin shell around that service. A
-feasibility scan of the real files measured 99.8% of stations located (13 unmatched) and a
+feasibility scan of the real files measured 99.8% of stations located (13 unmatched); the compact
+third tier (research R1 update) raises this to 99.9% (6 unmatched); the reviewed rejected-matches list (R11) then drops 2 known-wrong matches, for 6,618 located and 8 unmatched. The scan also measured a
 6.5 s gazetteer pass (research R1, R2).
 
 ## Technical Context
@@ -96,8 +97,9 @@ stations/
 ├── pipeline/                       # pure, no Django imports
 │   ├── __init__.py
 │   ├── clean.py                    # header check, row validation, PriceRow, group_stations
-│   ├── geonames.py                 # normalise_place_name, load_gazetteer, tie rule, lookup
-│   ├── build.py                    # locate stations, BuildResult, report numbers, place-lookup rows
+│   ├── geonames.py                 # normalise_place_name, compact_place_name, load_gazetteer, tie rule, 3-tier lookup
+│   ├── overrides.py                # load + validate the reviewed rejected-matches list (FR-022)
+│   ├── build.py                    # locate stations, apply rejections, BuildResult, report numbers, place-lookup rows
 │   └── export.py                   # byte-stable writers: unmatched CSV, gzipped place lookup
 ├── services/                       # application logic (one module per service)
 │   ├── __init__.py
@@ -107,14 +109,15 @@ stations/
 └── fixtures/stations.json          # committed
 
 data/
+├── overrides/rejected_matches.csv  # committed, hand-reviewed: matches to reject (FR-022)
 ├── places/us_places.csv.gz         # committed
-└── reports/unmatched_cities.csv    # committed
+└── reports/unmatched_cities.csv    # committed (with a reason column)
 
 tests/
 ├── fixtures/
 │   ├── sample_fuel.csv             # ~20 rows: Canada, duplicates, spelling variants, spaces, St./Mc/Ft, unknown city, 3.00733333
 │   ├── sample_fuel_bad.csv         # two malformed rows
-│   └── sample_geonames.txt         # ~10 lines in US.txt format: a tie, a PPLH place, an alternate name
+│   └── sample_geonames.txt         # ~13 lines in US.txt format: a tie, a PPLH place, an alternate name, compact-tier places (DeForest WI, Brook Park OH)
 ├── unit/
 │   ├── __init__.py
 │   └── stations/

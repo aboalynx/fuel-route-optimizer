@@ -26,6 +26,7 @@ def run(fixtures_dir, out_dirs):
             "fixture_out": out_dirs.fixture,
             "unmatched_out": out_dirs.unmatched,
             "places_out": out_dirs.places,
+            "rejected_matches": out_dirs.fixture.parent / "no_rejections.csv",
             "stdout": StringIO(),
         } | overrides
         call_command("build_station_data", **options)
@@ -46,8 +47,8 @@ def snapshot(out_dirs):
 def test_happy_path_stores_stations_and_prints_the_report(run, out_dirs):
     stdout = run()
 
-    assert FuelStation.objects.count() == 12
-    assert FuelPrice.objects.count() == 16
+    assert FuelStation.objects.count() == 14
+    assert FuelPrice.objects.count() == 18
     st_louis = FuelStation.objects.get(pk=101)
     assert st_louis.best_price == Decimal("3.00733333")
     assert (st_louis.city, st_louis.lat, st_louis.lng) == ("St. Louis", 38.62727, -90.19789)
@@ -57,13 +58,14 @@ def test_happy_path_stores_stations_and_prints_the_report(run, out_dirs):
     assert not FuelStation.objects.exclude(match_score=None).exists()
     assert not FuelStation.objects.filter(pk=106).exists()
 
-    assert "Rows read 19 | Canadian rows dropped 2 | US price rows read 17" in stdout
-    assert "Stations located 12 (92.3%, threshold 50%)" in stdout
+    assert "Rows read 21 | Canadian rows dropped 2 | US price rows read 19" in stdout
+    assert "Stations located 14 (93.3%, threshold 50%)" in stdout
+    assert FuelStation.objects.get(pk=114).city == "De Forest"  # located by the compact tier
 
     with open(out_dirs.unmatched, newline="", encoding="utf-8") as f:
         assert list(csv.reader(f)) == [
-            ["opis_id", "name", "city", "state"],
-            ["106", "GHOST GAS", "Nowhereville", "KS"],
+            ["opis_id", "name", "city", "state", "reason"],
+            ["106", "GHOST GAS", "Nowhereville", "KS", "not found"],
         ]
     assert out_dirs.fixture.exists()
 
@@ -76,7 +78,7 @@ def test_two_runs_give_identical_keys_and_bytes(run, out_dirs):
     second = snapshot(out_dirs) + (out_dirs.unmatched.read_bytes(),)
 
     assert first == second
-    assert [pk for pk, *_ in first[1]] == list(range(1, 17))
+    assert [pk for pk, *_ in first[1]] == list(range(1, 19))
 
 
 # (c) precision survives the fixture round trip
@@ -128,15 +130,15 @@ def test_below_threshold_keeps_data_and_fixture(run, out_dirs):
     with pytest.raises(CommandError, match="below"):
         run(min_geocoded_pct=95, stdout=stdout)
 
-    assert "Stations located 12 (92.3%, threshold 95%)" in stdout.getvalue()
+    assert "Stations located 14 (93.3%, threshold 95%)" in stdout.getvalue()
     assert out_dirs.unmatched.exists()
     assert snapshot(out_dirs) == before
 
 
 def test_lower_threshold_passes(run):
-    run(min_geocoded_pct=92)
+    run(min_geocoded_pct=93)
 
-    assert FuelStation.objects.count() == 12
+    assert FuelStation.objects.count() == 14
 
 
 def test_threshold_must_be_a_percentage(run):
@@ -161,7 +163,7 @@ def test_missing_gazetteer_names_path_and_url(run, out_dirs, tmp_path):
 def test_no_export_stores_but_writes_no_fixture(run, out_dirs):
     run(no_export=True)
 
-    assert FuelStation.objects.count() == 12
+    assert FuelStation.objects.count() == 14
     assert not out_dirs.fixture.exists()
 
 
@@ -189,8 +191,8 @@ def test_happy_path_writes_the_place_lookup(run, out_dirs):
     rows = place_lookup_rows(out_dirs.places)
     assert rows[0] == ["normalised_name", "display_name", "state", "lat", "lng", "population"]
     assert ["saint louis", "Saint Louis", "MO", "38.62727", "-90.19789", "301578"] in rows
-    assert len(rows) == 1 + 8
-    assert "Places index 8 places, 0.0 MB" in stdout
+    assert len(rows) == 1 + 12
+    assert "Places index 12 places, 0.0 MB" in stdout
 
 
 def test_place_lookup_bytes_are_identical_across_runs(run, out_dirs):
@@ -218,3 +220,32 @@ def test_failures_leave_the_place_lookup_unchanged(run, out_dirs, fixtures_dir):
         run(min_geocoded_pct=95)
 
     assert out_dirs.places.read_bytes() == before
+
+
+# --- rejected-matches list (FR-022) ---------------------------------------------------------
+
+
+def test_rejected_match_is_dropped_with_its_reason(run, out_dirs, fixtures_dir):
+    stdout = run(rejected_matches=fixtures_dir / "sample_rejected_matches.csv")
+
+    assert not FuelStation.objects.filter(pk=105).exists()
+    assert FuelStation.objects.count() == 13
+    assert "Stations dropped 2 (not found 1, rejected match 1)" in stdout
+    with open(out_dirs.unmatched, newline="", encoding="utf-8") as f:
+        assert list(csv.reader(f))[1:] == [
+            ["105", "HOMETOWN FUEL", "Hometown", "KS", "rejected match: New Hometown"],
+            ["106", "GHOST GAS", "Nowhereville", "KS", "not found"],
+        ]
+
+
+def test_malformed_rejected_matches_file_changes_nothing(run, out_dirs, tmp_path):
+    run()
+    before = snapshot(out_dirs) + (out_dirs.unmatched.read_bytes(), out_dirs.places.read_bytes())
+    bad = tmp_path / "bad_rejected.csv"
+    bad.write_text("city,state,matched_name,reason\nHometown,ZZ,New Hometown,x\n", encoding="utf-8")
+
+    with pytest.raises(CommandError, match="line 2, state, 'ZZ': unknown state code"):
+        run(rejected_matches=bad)
+
+    after = snapshot(out_dirs) + (out_dirs.unmatched.read_bytes(), out_dirs.places.read_bytes())
+    assert after == before

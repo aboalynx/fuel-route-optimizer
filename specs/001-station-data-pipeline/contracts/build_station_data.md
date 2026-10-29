@@ -7,6 +7,7 @@
 | `--csv PATH` | `settings.FUEL_PRICES_CSV` | Price file to read |
 | `--geonames PATH` | `settings.GEONAMES_FILE` | GeoNames `US.txt` |
 | `--min-geocoded-pct PCT` | `95` | Minimum located share, 0–100 (FR-021) |
+| `--rejected-matches PATH` | `data/overrides/rejected_matches.csv` | Reviewed list of matches to reject (FR-022). A missing file means no rejections |
 | `--no-export` | off | Store in the DB but do not write the fixture or the place lookup |
 | `--skip-osm` | on (no-op) | Accepted for forward compatibility. OSM matching arrives in Feature 005 |
 
@@ -25,7 +26,7 @@
 Rows read 8,151 | Canadian rows dropped 620 | US price rows read 7,531 | price rows stored N
 Stations kept 6,626 | with several prices 568
 Stations located N (P%, threshold 95%) | city_centroid 100% | osm 0%
-Stations dropped (city not found) N -> data/reports/unmatched_cities.csv
+Stations dropped N (not found N, rejected match N) -> data/reports/unmatched_cities.csv
 Places index N places, X.X MB
 ```
 
@@ -53,11 +54,21 @@ Decimals are serialised as strings with 8 decimal places (e.g. `"3.00733333"`).
 
 ### `data/reports/unmatched_cities.csv`
 
-UTF-8 with `\n` line endings, ordered by `opis_id`, committed:
+UTF-8 with `\n` line endings, ordered by `opis_id`, committed. `reason` is `not found` or
+`rejected match: <matched GeoNames name>`:
 
 ```text
-opis_id,name,city,state
+opis_id,name,city,state,reason
 ```
+
+### `data/overrides/rejected_matches.csv` (input, committed, hand-reviewed)
+
+```text
+city,state,matched_name,reason
+```
+
+It only rejects matches and never supplies coordinates. A malformed file stops the rebuild before
+anything is written, and the error lists every problem.
 
 ### `data/places/us_places.csv.gz`
 

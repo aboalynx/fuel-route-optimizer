@@ -8,9 +8,10 @@ from decimal import Decimal
 from fractions import Fraction
 from pathlib import Path
 
-from stations.enums import GeoSource, MatchVia
+from stations.enums import GeoSource, MatchVia, UnmatchedReason
 from stations.pipeline.clean import PriceRow, StationRecord, group_stations, read_price_rows
 from stations.pipeline.geonames import Gazetteer, Place, load_gazetteer, normalise_place_name
+from stations.pipeline.overrides import load_rejected_matches
 
 
 @dataclass(frozen=True)
@@ -18,6 +19,19 @@ class LocatedStation:
     station: StationRecord
     place: Place
     via: MatchVia
+
+
+@dataclass(frozen=True)
+class UnmatchedStation:
+    station: StationRecord
+    reason: UnmatchedReason
+    matched_name: str | None = None  # the rejected GeoNames place, for REJECTED
+
+    @property
+    def reason_text(self) -> str:
+        if self.reason is UnmatchedReason.REJECTED:
+            return f"{self.reason}: {self.matched_name}"
+        return str(self.reason)
 
 
 @dataclass(frozen=True)
@@ -38,7 +52,7 @@ class BuildResult:
     canadian_rows: int
     us_price_rows: int
     located: list[LocatedStation]  # sorted by opis_id
-    unmatched: list[StationRecord]  # sorted by opis_id
+    unmatched: list[UnmatchedStation]  # sorted by opis_id
     places_index: list[PlaceIndexRow] = field(default_factory=list)
 
     @property
@@ -47,8 +61,16 @@ class BuildResult:
 
     @property
     def stations_with_several_prices(self) -> int:
-        stations = [item.station for item in self.located] + self.unmatched
+        stations = [item.station for item in self.located + self.unmatched]
         return sum(1 for station in stations if len(station.rows) > 1)
+
+    @property
+    def not_found_count(self) -> int:
+        return sum(1 for u in self.unmatched if u.reason is UnmatchedReason.NOT_FOUND)
+
+    @property
+    def rejected_count(self) -> int:
+        return sum(1 for u in self.unmatched if u.reason is UnmatchedReason.REJECTED)
 
     @property
     def located_count(self) -> int:
@@ -76,22 +98,28 @@ class BuildResult:
         return self.located_share >= Fraction(str(min_pct))
 
 
-def build(csv_path: Path, geonames_path: Path) -> BuildResult:
-    """Validate the price file, group it by station and locate each station.
+def build(
+    csv_path: Path, geonames_path: Path, rejected_matches_path: Path | None = None
+) -> BuildResult:
+    """Validate the inputs, group the price file by station and locate each station.
 
-    Raises PriceFileError or GazetteerMissing before any work is done.
+    Raises PriceFileError, OverridesFileError or GazetteerMissing before any work is done.
     """
     price_file = read_price_rows(csv_path)
+    rejected = load_rejected_matches(rejected_matches_path)
     gazetteer = load_gazetteer(geonames_path)
 
     located: list[LocatedStation] = []
-    unmatched: list[StationRecord] = []
+    unmatched: list[UnmatchedStation] = []
     for station in group_stations(price_file.rows):
         match = gazetteer.lookup(station.city, station.state)
         if match is None:
-            unmatched.append(station)
+            unmatched.append(UnmatchedStation(station, UnmatchedReason.NOT_FOUND))
+            continue
+        place, via = match
+        if rejected.rejects(station.city, station.state, place.name):
+            unmatched.append(UnmatchedStation(station, UnmatchedReason.REJECTED, place.name))
         else:
-            place, via = match
             located.append(LocatedStation(station=station, place=place, via=via))
 
     return BuildResult(
@@ -109,8 +137,8 @@ def place_index_rows(gazetteer: Gazetteer, located: list[LocatedStation]) -> lis
 
     - every main-name key of a place with population > 0;
     - every main-name key of a place a station matched (even with population 0);
-    - an alternate-name row for a place matched through that alternate name, only when no
-      main name already uses the key (a main name always wins).
+    - a row under the station's normalised city key for a place matched through the alternate
+      or compact tier, only when no main name already uses the key (a main name always wins).
     """
     matched_ids = {item.place.geonameid for item in located}
     rows: dict[tuple[str, str], PlaceIndexRow] = {}
@@ -120,7 +148,7 @@ def place_index_rows(gazetteer: Gazetteer, located: list[LocatedStation]) -> lis
             rows[(state, name)] = _index_row(name, place)
 
     for item in located:
-        if item.via is MatchVia.ALTERNATE:
+        if item.via is not MatchVia.PRIMARY:
             name = normalise_place_name(item.station.city)
             key = (item.station.state, name)
             if (name, item.station.state) not in gazetteer.primary:
@@ -169,7 +197,8 @@ def format_report(
         f"with several prices {result.stations_with_several_prices:,}",
         f"Stations located {result.located_count:,} ({_pct(result.located_share)}, "
         f"threshold {_pct(Fraction(str(min_pct)))}) | {source_shares}",
-        f"Stations dropped (city not found) {result.dropped_count:,} -> {unmatched_path}",
+        f"Stations dropped {result.dropped_count:,} (not found {result.not_found_count:,}, "
+        f"rejected match {result.rejected_count:,}) -> {unmatched_path}",
     ]
     if places_info is not None:
         count, megabytes = places_info

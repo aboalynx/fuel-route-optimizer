@@ -9,3 +9,5 @@
 4273100	New Hometown	New Hometown	Hometown,Old Hometown	38.95000	-97.15000	P	PPL	US		KS				1200		100	America/Chicago	2024-01-01
 4740000	Tinyville	Tinyville		31.50000	-98.50000	P	PPL	US		TX				0		100	America/Chicago	2024-01-01
 4400000	Lake Example	Lake Example		38.70000	-90.30000	H	LK	US		MO				0		100	America/Chicago	2024-01-01
+5250000	DeForest	DeForest		43.24778	-89.34373	P	PPL	US		WI				10368		100	America/Chicago	2024-01-01
+5146000	Brook Park	Brook Park		41.39838	-81.80458	P	PPL	US		OH				18595		100	America/Chicago	2024-01-01

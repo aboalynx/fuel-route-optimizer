@@ -24,9 +24,11 @@ normalise_place_name(s):
 gazetteer = US.txt rows with feature class P, excluding PPLH / PPLQ / PPLW
 primary   = {(norm(name), state), (norm(asciiname), state)} -> place
 fallback  = {(norm(alt), state) for alt in alternatenames}  -> place   # only if primary misses
+compact   = {(compact(name), state)} from main names only     -> place   # only if both miss
+            compact(s) = norm(s), leading n/s/e/w -> north/south/east/west, all spaces removed
 tie rule  = highest population, then lowest geonameid
 
-for each station: place = primary.get(key) or fallback.get(key)
+for each station: place = primary.get(key) or fallback.get(key) or compact.get(ckey)
     found   -> lat, lng = place centroid; geo_source = GeoSource.CITY_CENTROID; match_score = null
     missing -> excluded, written to data/reports/unmatched_cities.csv
 ```
@@ -36,7 +38,9 @@ The same `normalise_place_name` builds the committed places index `data/places/u
 to resolve `"City, ST"`. Coordinates count as "in the USA" when the nearest place is within 25 miles.
 
 Alternate names are only a fallback, because they include foreign and historical names that would
-cause false matches if used first.
+cause false matches if used first. The compact tier comes last and catches spacing, punctuation and
+direction-abbreviation differences ("De Forest" vs "DeForest", "S Coffeyville" vs "South
+Coffeyville"). It is still an exact key, so matching stays deterministic.
 
 ## Rejected alternatives
 

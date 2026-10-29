@@ -9,11 +9,13 @@ from django.core.management.base import BaseCommand, CommandError
 
 from stations.pipeline.clean import PriceFileError
 from stations.pipeline.geonames import GazetteerMissing
+from stations.pipeline.overrides import OverridesFileError
 from stations.services.station_data import LocatedShareTooLow, rebuild_station_data
 
 DEFAULT_FIXTURE = Path(settings.BASE_DIR) / "stations" / "fixtures" / "stations.json"
 DEFAULT_UNMATCHED = Path(settings.BASE_DIR) / "data" / "reports" / "unmatched_cities.csv"
 DEFAULT_PLACES = Path(settings.BASE_DIR) / "data" / "places" / "us_places.csv.gz"
+DEFAULT_REJECTED = Path(settings.BASE_DIR) / "data" / "overrides" / "rejected_matches.csv"
 
 
 class Command(BaseCommand):
@@ -29,6 +31,12 @@ class Command(BaseCommand):
             "--min-geocoded-pct",
             default="95",
             help="Minimum share of stations that must be located, 0-100 (default 95).",
+        )
+        parser.add_argument(
+            "--rejected-matches",
+            type=Path,
+            default=DEFAULT_REJECTED,
+            help="Reviewed matches to reject (default data/overrides/rejected_matches.csv).",
         )
         parser.add_argument(
             "--no-export",
@@ -62,8 +70,9 @@ class Command(BaseCommand):
                 fixture_out=Path(options["fixture_out"]),
                 unmatched_out=Path(options["unmatched_out"]),
                 places_out=Path(options["places_out"]),
+                rejected_matches_path=Path(options["rejected_matches"]),
             )
-        except (PriceFileError, GazetteerMissing) as error:
+        except (PriceFileError, OverridesFileError, GazetteerMissing) as error:
             raise CommandError(str(error)) from error
         except LocatedShareTooLow as error:
             self.stdout.write(error.report_text)

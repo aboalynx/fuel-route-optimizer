@@ -15,6 +15,7 @@ GAZETTEER_URL = "https://download.geonames.org/export/dump/US.zip"
 EXCLUDED_FEATURE_CODES = frozenset({"PPLH", "PPLQ", "PPLW"})
 
 _TOKEN_MAP = {"st": "saint", "ste": "sainte", "ft": "fort", "mt": "mount"}
+_DIRECTIONS = {"n": "north", "s": "south", "e": "east", "w": "west"}
 
 # US.txt column positions.
 _ID, _NAME, _ASCII, _ALT, _LAT, _LNG, _CLASS, _CODE, _STATE, _POP = 0, 1, 2, 3, 4, 5, 6, 7, 10, 14
@@ -44,14 +45,19 @@ class Place:
 class Gazetteer:
     primary: dict[Key, Place] = field(default_factory=dict)
     alternate: dict[Key, Place] = field(default_factory=dict)
+    compact: dict[Key, Place] = field(default_factory=dict)  # from main names only
 
     def lookup(self, city: str, state: str) -> tuple[Place, MatchVia] | None:
-        """Main names first; an alternate name only when no main name matches."""
+        """Main names, then alternate names, then the compact key; a later tier never
+        overrides an earlier match."""
         key = (normalise_place_name(city), state)
         if key in self.primary:
             return self.primary[key], MatchVia.PRIMARY
         if key in self.alternate:
             return self.alternate[key], MatchVia.ALTERNATE
+        compact_key = (compact_place_name(city), state)
+        if compact_key in self.compact:
+            return self.compact[compact_key], MatchVia.COMPACT
         return None
 
 
@@ -70,6 +76,15 @@ def normalise_place_name(name: str) -> str:
             joined.append(tokens[i])
             i += 1
     return " ".join(joined)
+
+
+def compact_place_name(name: str) -> str:
+    """Third-tier key: the normalised name with a leading n/s/e/w expanded and all spaces
+    removed, so "De Forest" == "DeForest" and "S Coffeyville" == "South Coffeyville"."""
+    tokens = normalise_place_name(name).split()
+    if tokens:
+        tokens[0] = _DIRECTIONS.get(tokens[0], tokens[0])
+    return "".join(tokens)
 
 
 def load_gazetteer(path: Path) -> Gazetteer:
@@ -94,6 +109,7 @@ def load_gazetteer(path: Path) -> Gazetteer:
             )
             for name in {cols[_NAME], cols[_ASCII]}:
                 _keep_best(gazetteer.primary, (normalise_place_name(name), place.state), place)
+                _keep_best(gazetteer.compact, (compact_place_name(name), place.state), place)
             for name in cols[_ALT].split(","):
                 if name:
                     _keep_best(

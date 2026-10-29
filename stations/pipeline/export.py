@@ -11,16 +11,18 @@ import os
 from collections.abc import Iterable
 from pathlib import Path
 
-from stations.pipeline.build import PlaceIndexRow
-from stations.pipeline.clean import StationRecord
+from stations.pipeline.build import PlaceIndexRow, UnmatchedStation
 
-UNMATCHED_HEADER = ["opis_id", "name", "city", "state"]
+UNMATCHED_HEADER = ["opis_id", "name", "city", "state", "reason"]
 PLACES_HEADER = ["normalised_name", "display_name", "state", "lat", "lng", "population"]
 
 
-def write_unmatched_csv(stations: Iterable[StationRecord], path: Path) -> None:
-    """Unmatched stations ordered by opis_id, UTF-8, '\\n' line endings."""
-    rows = [[s.opis_id, s.name, s.city, s.state] for s in sorted(stations, key=lambda s: s.opis_id)]
+def write_unmatched_csv(unmatched: Iterable[UnmatchedStation], path: Path) -> None:
+    """Unmatched stations with their reason, ordered by opis_id, UTF-8, '\\n' line endings."""
+    rows = [
+        [u.station.opis_id, u.station.name, u.station.city, u.station.state, u.reason_text]
+        for u in sorted(unmatched, key=lambda u: u.station.opis_id)
+    ]
     write_bytes_atomically(path, _csv_bytes(UNMATCHED_HEADER, rows))
 
 
