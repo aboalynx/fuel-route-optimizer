@@ -60,7 +60,7 @@ There is no LLM or other non-deterministic component in the request path.
 
 | ID | Requirement | Target |
 | --- | --- | --- |
-| N1 | Latest stable Django | Django 6.1.x, Python 3.15 (developed on 3.15.2) |
+| N1 | Latest stable Django | Django 6.1.2. Python 3.13–3.14 officially (Django 6.1.2); also developed and CI-tested on 3.15. Django adds official 3.15 support in 6.1.3. |
 | N2 | Fast response | Under ~1.5 s end to end on a cold route; under 100 ms on a cached route |
 | N3 | Few routing API calls | Exactly 1 per request (0 on a cache hit); start and finish resolved locally |
 | N4 | Easy setup | Clone, install, migrate, load data, run: no API keys, no geocoding step |
@@ -299,10 +299,10 @@ This table is updated in the Phase 0 commit: tick each Phase 0 item off as done.
 | ruff and pytest config in `pyproject.toml`, smoke test | Done |
 | Constitution v1.0.0 ratified | Done; amendment to v1.1.0 in Phase 0 |
 | GeoNames `US.txt` downloaded (git-ignored) | Done |
-| `.gitignore` incomplete; `__pycache__/*.pyc` staged | Phase 0 |
-| Local venv on Python 3.15.2 | Done (chosen version; cp315 wheels exist for numpy, scipy, rapidfuzz) |
-| `requirements.txt`, `requirements-dev.txt` | Missing, Phase 0 |
-| `.github/workflows/ci.yml` | Missing, Phase 0 |
+| `.gitignore` complete; committed `__pycache__/*.pyc` untracked | Done (Phase 0) |
+| Python support | Done: Python 3.13–3.14 officially (Django 6.1.2); also developed and CI-tested on 3.15. Django adds official 3.15 support in 6.1.3. Local venv: 3.15.2 (cp315 wheels exist for numpy, scipy, rapidfuzz) |
+| `requirements.txt`, `requirements-dev.txt` | Done (Phase 0), pinned from the venv; Django `>=6.1.2,<6.2` |
+| `.github/workflows/ci.yml` | Done (Phase 0): matrix 3.13 / 3.14 / 3.15; first run after the first push |
 
 ## 7. How to run each feature through Spec-Kit
 
@@ -348,14 +348,14 @@ Ship 001–004 and Release first. 005 is optional. If time is short, drop the op
 
 Do these in order:
 
-- [ ] **Fix `.gitignore`.** Add `__pycache__/`, `*.pyc`, `db.sqlite3`, `.env`, `.local/`, `data/geonames/`, `data/cache/`, and the Spec-Kit tooling folders (`.specify/scripts/`, `.specify/templates/`, `.claude/`). Keep `.specify/memory/` and `specs/` tracked. Untrack the committed bytecode with `git rm -r --cached --ignore-unmatch '*/__pycache__'`.
-- [ ] **Python version.** Confirm the venv runs Python 3.15.2 (`python --version`). Use 3.15 in CI and the README too.
-- [ ] **Requirements files.**
-  - `requirements.txt` (runtime): `django==6.1.*`, `djangorestframework`, `django-environ`, `numpy`, `scipy`, `httpx`, `rapidfuzz`.
+- [x] **Fix `.gitignore`.** Ignore `.venv/`, `__pycache__/`, `*.pyc`, `.env`, `db.sqlite3`, `.coverage`, `htmlcov/`, `.pytest_cache/`, `.ruff_cache/`, `.DS_Store`, `.local/`, `data/geonames/`, `data/cache/`, and the Spec-Kit/Claude tooling folders (`.specify/scripts/`, `.specify/templates/`, `.specify/integrations/`, `.specify/workflows/`, `.claude/`). Keep `.specify/memory/` and `specs/` tracked. Untrack committed bytecode with `git rm -r --cached --ignore-unmatch --quiet '*/__pycache__' '*.pyc'`.
+- [x] **Python version.** Python 3.13–3.14 officially (Django 6.1.2); also developed and CI-tested on 3.15. Django adds official 3.15 support in 6.1.3. The local venv runs 3.15.2. `pyproject.toml` keeps `requires-python = ">=3.13"` and ruff `target-version = "py313"`.
+- [x] **Requirements files** (pinned with `==` from the venv, except Django).
+  - `requirements.txt` (runtime): `Django>=6.1.2,<6.2`, `djangorestframework`, `django-environ`, `numpy`, `scipy`, `httpx`, `rapidfuzz`.
   - `requirements-dev.txt`: starts with `-r requirements.txt`, then `ruff`, `pytest`, `pytest-django`, `pytest-cov`, `respx`, `pre-commit`.
-- [ ] **CI.** `.github/workflows/ci.yml`: Python 3.15 (`actions/setup-python` with `python-version: "3.15"`) with pip cache, `pip install -r requirements-dev.txt`, `ruff check .`, `ruff format --check .`, `pytest --cov=planner --cov=stations --cov=routing --cov-report=term-missing`.
+- [x] **CI.** `.github/workflows/ci.yml`: on push and pull_request; matrix Python 3.13 / 3.14 / 3.15 (`fail-fast: false`, `allow-prereleases: true`) with pip cache, `pip install -r requirements-dev.txt`, `ruff check .`, `ruff format --check .`, `pytest --cov=planner --cov=stations --cov=routing --cov-report=term-missing`.
 - [ ] **Constitution amendment** via `/speckit-constitution` (MINOR, v1.0.0 → v1.1.0), added under Principle VII: *"A bounded in-process cache (Django's built-in LocMem cache) for routing responses is permitted. It must stay optional, must not require external infrastructure, and a cache hit must not change the computed plan."*
-- [ ] **Commit** `chore: complete project setup and CI` with CI green.
+- [x] **Commit** `chore: complete project setup and CI` (local). CI goes green on the first push.
 
 ---
 
@@ -375,12 +375,24 @@ fixture. Also export the committed places index used to resolve `"City, ST"` inp
 **Pipeline steps** (all inside `python manage.py build_station_data`)
 
 Flags: `--csv` (default `settings.FUEL_PRICES_CSV`), `--geonames` (default `settings.GEONAMES_FILE`),
-`--skip-osm` (on by default until Feature 005 exists), `--no-export`. If the GeoNames file is
+`--skip-osm` (on by default until Feature 005 exists), `--no-export`, `--min-geocoded-pct` (default 95).
+If the located share is below `--min-geocoded-pct`, the command prints the report and writes
+`data/reports/unmatched_cities.csv`. It then exits non-zero **before** storing or exporting, so the DB and fixture stay
+unchanged. If the GeoNames file is
 missing, the command stops with a clear error naming the expected path and the download source
 (`https://download.geonames.org/export/dump/US.zip`). Loading the shipped fixture never needs it.
 
 1. **Clean** (`stations/pipeline/clean.py`, pure):
    - Read the file with the `csv` module and `strip()` every value.
+   - **Validate the whole file before anything is written:**
+     - If a header column is missing or renamed, fail immediately.
+     - Otherwise, collect every malformed-row problem as `(line, column, value, reason)`:
+       - OPIS ID or Rack ID missing or not an integer;
+       - price empty, not a decimal, or ≤ 0;
+       - empty City or State;
+       - a State that is neither US/DC nor Canadian.
+     - If there is any problem, raise one `CsvValidationError` listing the first 50 plus the total count. The command exits non-zero and nothing is written.
+     - Canadian rows are valid and are dropped silently.
    - Drop Canadian rows by province code: AB, BC, MB, NB, NL, NS, NT, NU, ON, PE, QC, SK, YT.
    - Parse prices as `Decimal` from the raw string, never via float. Keep every digit (up to 8 dp). Store them in `DecimalField(max_digits=12, decimal_places=8)`.
    - Group rows by OPIS ID. For each station: display name = first spelling seen; `best_price` = minimum price; keep every raw row.
@@ -412,7 +424,7 @@ missing, the command stops with a clear error naming the expected path and the d
    ```text
    Rows read 8,151 | Canadian rows dropped 620 | US price rows 7,531
    Stations kept 6,626 | with several prices 568
-   Stations located 6,5xx (9x.x%) | city_centroid 100% | osm 0%
+   Stations located 6,5xx (9x.x%, threshold 95%) | city_centroid 100% | osm 0%
    Stations dropped (city not found) nn -> data/reports/unmatched_cities.csv
    Places index 2x,xxx places, x.x MB
    ```
@@ -469,7 +481,8 @@ spelling) and stations/pipeline/geonames.py (stream US.txt, class P minus PPLH/P
 normalise_place_name, primary lookup from name+asciiname, alternate-name fallback, tie rule
 population desc then geonameid asc, places index export). Management command build_station_data
 with --csv (default settings.FUEL_PRICES_CSV), --geonames (default settings.GEONAMES_FILE),
---skip-osm (default on), --no-export. FuelStation.opis_id is the primary key. Store inside
+--skip-osm (default on), --no-export, --min-geocoded-pct (default 95; below it: report + unmatched
+file, exit non-zero, nothing stored or exported). FuelStation.opis_id is the primary key. Store inside
 transaction.atomic(): delete all, bulk_create stations sorted by opis_id, assign FuelPrice.id
 explicitly as 1..N (order: opis_id, then CSV row order), bulk_create prices. Reason: SQLite
 AUTOINCREMENT and PostgreSQL sequences give new ids after a delete, which would make the fixture
@@ -487,6 +500,8 @@ assumptions (Canada excluded, minimum price, centroid coordinates) in the same c
   - `tests/fixtures/sample_geonames.txt` (~10 lines in the real `US.txt` format): two places with the same name in one state (tie rule) and one PPLH place that must be ignored.
 - **Unit:**
   - clean: Canada dropped, stripping, `Decimal`, grouping, min price, first spelling.
+  - validation: a sample with two bad rows exits non-zero and reports both line numbers; the DB and exported files are unchanged after the failed run; a renamed header fails immediately; more than 50 problems → the first 50 plus the total count.
+  - threshold: a sample below `--min-geocoded-pct` exits non-zero and leaves the DB and fixture unchanged; the same sample passes with a lower `--min-geocoded-pct`; the report prints the threshold next to the share.
   - missing gazetteer: the command exits with a clear error naming the path and download source; existing data is untouched.
   - stable keys: two consecutive runs produce identical primary keys (stations and prices) and an identical fixture file (byte comparison).
   - precision: a price of `3.00733333` survives clean → `bulk_create` → DB read → fixture → `loaddata` exactly (`== Decimal("3.00733333")`). The sample CSV includes such a row.
@@ -494,7 +509,7 @@ assumptions (Canada excluded, minimum price, centroid coordinates) in the same c
   - lookup: tie rule, alternate-name fallback, unmatched.
 - **Integration** (pytest-django): run the command on both samples with `--skip-osm`. Check both tables, the report, the unmatched file, the places index, the fixture, and that a second run is identical.
 
-**Done when:** the fixture and places index are committed, the report numbers are in the README, and CI is green.
+**Done when:** the fixture and places index are committed, the report numbers are in the README, and CI is green. Load and rebuild times are measured once by hand (targets: load < 1 min, rebuild < 5 min) and written in the README with the machine, e.g. "Load: 4 s. Full rebuild: 48 s (2018 Intel MacBook Pro)". They are not asserted in CI, because `US.txt` is not on the runner and runner timings vary.
 
 ---
 
@@ -847,9 +862,10 @@ Tests use tests/fixtures/overpass_sample.json and respx.
   - the assumptions in Section 4.4;
   - trade-offs: centroids, corridor radius, start full, car profile, detour ignored, no reserve by default;
   - "A purely cost-optimal plan can include two stops close together for a small saving; a minimum-saving-per-stop rule is future work.";
-  - measured timings;
+  - measured timings (station data load and rebuild from Feature 001; API cold/cached from Feature 004), with the machine used;
+  - the `--min-geocoded-pct` used for the shipped data, and the reason, if it was below the default 95;
   - data attribution: GeoNames (CC-BY 4.0), and OpenStreetMap contributors (ODbL) if 005 ships;
-  - future work: PostGIS, exact station coordinates, detour cost, live prices, truck profile.
+  - future work: PostGIS, exact station coordinates, detour cost, live prices, truck profile; mark 3.15 as officially supported once Django 6.1.3 is released.
 - [ ] Postman collection `docs/postman_collection.json` (DL7) with five requests:
   - Dallas → Chicago;
   - a short trip with no stops;

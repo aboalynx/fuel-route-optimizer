@@ -2,7 +2,7 @@
 
 Built as a take-home assessment for the Backend Django Engineer role at Spotter.
 
-[![CI](https://github.com/<github-username>/<repo-name>/actions/workflows/ci.yml/badge.svg)](https://github.com/<github-username>/<repo-name>/actions/workflows/ci.yml)
+[![CI](https://github.com/aboalynx/fuel-route-optimizer/actions/workflows/ci.yml/badge.svg)](https://github.com/aboalynx/fuel-route-optimizer/actions/workflows/ci.yml)
 
 The service plans fuel stops for a truck trip inside the USA. Send it a start and a finish. Using the
 provided diesel prices, it returns:
@@ -50,7 +50,8 @@ FIRST USE: stations + KD-tree loaded into memory once (lazy, lru_cache)
 
 ## Tech stack
 
-- Django 6.1, Django REST Framework, Python 3.15
+- Django 6.1.2, Django REST Framework
+- Python 3.13–3.14 officially (Django 6.1.2); also developed and CI-tested on 3.15. Django adds official 3.15 support in 6.1.3.
 - numpy and scipy (`cKDTree` for the spatial search), httpx, rapidfuzz
 - Routing: OSRM public demo server (no API key)
 - Database: SQLite by default, configurable via `DATABASE_URL`
@@ -58,7 +59,7 @@ FIRST USE: stations + KD-tree loaded into memory once (lazy, lru_cache)
 ## Setup (current state)
 
 ```bash
-python3.15 -m venv .venv && source .venv/bin/activate
+python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements-dev.txt
 cp .env.example .env
 python manage.py migrate
@@ -188,3 +189,4 @@ any part of it.
 - Live prices
 - A truck routing profile
 - A minimum saving per extra stop (a purely cost-optimal plan can add a nearby stop for a small saving)
+- Mark 3.15 as officially supported once Django 6.1.3 is released.

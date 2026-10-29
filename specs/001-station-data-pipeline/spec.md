@@ -8,6 +8,19 @@
 
 **Input**: User description: "Build the station data set used by the route planner. Input: the provided OPIS fuel price CSV (8,151 rows; no coordinates). Keep US stations only (drop Canadian provinces). One station per OPIS Truckstop ID; keep every raw price row; the station's price is the minimum of its rows (the data gives no reason for differing prices). Every kept station needs coordinates; use the centre of its city as a baseline. Stations whose city cannot be located are reported and excluded. The result must be reproducible by a reviewer with one command, and also shipped as ready-to-load data so the project runs without any network access. Print a report: rows read, Canadian rows dropped, stations kept, stations located, stations dropped. Out of scope: precise station coordinates (a later feature), the routing API."
 
+## Clarifications
+
+### Session 2026-10-29
+
+- Q: When a station is excluded because its city can't be found, should its raw price rows also be left out of the stored data set? → A: Yes. Excluded stations' price rows are excluded with them. 7,531 is the US price-row count read before exclusion, and the report also shows the stored count.
+- Q: If the price file has a malformed row, should the rebuild skip it and report it, or stop with an error? → A: Stop, but only after validating the whole file first. Every problem is collected (line, column, value, reason) and reported in one error, capped at the first 50 plus a total count. Validation runs before anything is written. A missing or renamed header column fails immediately. Canadian rows are valid and are dropped silently.
+- Q: If fewer than 95% of stations can be located, should the rebuild still save and export the data? → A: No, by default. A minimum located-share threshold (default 95%) can be set per run.
+  - Below the threshold: print the report, write the unmatched-cities file, exit non-zero, and leave the stored data and exported files unchanged.
+  - At or above the threshold: save and export as normal.
+  - The report always shows the threshold next to the actual share.
+  - If the shipped data is ever built with a lower threshold, the README states the value and why.
+- Q: Are these speed targets right: load in under 1 minute and full rebuild in under 5 minutes on a typical laptop? → A: Yes. They are measured manually once on the developer's laptop and recorded in the README with the machine. They are not asserted in CI: the rebuild cannot run there (the gazetteer is not in the repository), and timing checks on shared runners are flaky.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Load ready-made station data offline (Priority: P1)
@@ -55,7 +68,10 @@ expected stations and prices.
 4. **Given** a price with 8 decimal places (e.g. 3.00733333), **When** the data is rebuilt and then loaded, **Then** the price reads back exactly, with no rounding.
 5. **Given** a station whose city cannot be found in the gazetteer, **When** the data is rebuilt, **Then** that station is excluded from the data set and listed in a reviewable file of unmatched cities.
 6. **Given** the rebuild has already run once, **When** it runs again on the same inputs, **Then** the stored data and the exported ready-to-load file are identical to the first run, byte for byte.
-7. **Given** the rebuild finishes, **When** the maintainer reads the report, **Then** it shows rows read, Canadian rows dropped, US price rows, stations kept, stations with several prices, stations located (count and percentage), stations dropped (with the path of the unmatched file), and the size of the place lookup data.
+7. **Given** the rebuild finishes, **When** the maintainer reads the report, **Then** it shows rows read, Canadian rows dropped, US price rows read, price rows stored, stations kept, stations with several prices, stations located (count and percentage), stations dropped (with the path of the unmatched file), and the size of the place lookup data.
+8. **Given** previously built data and a price file with two malformed rows, **When** the rebuild runs, **Then** it exits with a non-zero status and one error listing both line numbers, columns, values and reasons, and the stored data and exported files are unchanged.
+9. **Given** a price file whose "Retail Price" column is missing or renamed, **When** the rebuild runs, **Then** it fails immediately with an error naming the missing column, and nothing is written.
+10. **Given** previously built data and a sample whose located share is below the threshold, **When** the rebuild runs with the default threshold, **Then** it prints the report with the threshold, writes the unmatched-cities file, exits non-zero, and the stored data and exported files are unchanged. **When** the same sample is rebuilt with a threshold below its share, **Then** it saves and exports normally.
 
 ---
 
@@ -84,12 +100,17 @@ cities.
 
 - **Trailing spaces.** 1,256 city values in the price file have trailing spaces. Values are trimmed before any matching.
 - **Abbreviated names.** City names with abbreviations or punctuation ("St.", "Ft", "Mt", "Mc Lean", hyphens, apostrophes) are normalised the same way on both sides before matching.
+- **What the provided file actually contains.**
+  - Its cities never abbreviate Saint/Fort/Mount; 86 city/state pairs spell them out. The expansion rules therefore mainly normalise gazetteer names such as "St. Louis".
+  - 9 cities use the "Mc X" form (e.g. "Mc Lean, IL", "MC DERMITT, NV").
+  - One city uses a direction abbreviation ("S Coffeyville, OK"). It is expected in the unmatched list unless an alternate name matches.
 - **Duplicate place names.** When several places in one state share a normalised name, the most populous one wins, and the lowest gazetteer ID breaks remaining ties.
 - **Defunct places.** Historical, abandoned or destroyed places in the gazetteer are never used.
 - **Alternate names.** An alternate place name is used only when no primary name matches, to avoid false matches.
 - **Exact duplicate rows.** 81 IDs have rows with the same price. They become one station, and every raw row is kept.
+- **Malformed price file.** A malformed row (bad ID, bad or non-positive price, empty city/state, unknown state code) or a missing header column stops the rebuild before anything is written, with every problem listed (see FR-020).
 - **Gazetteer missing.** If the gazetteer file is not present when rebuilding, the command stops with a clear message saying where to get it. The shipped data is unaffected.
-- **Low match rate.** If fewer than 95% of stations are located, the rebuild still completes and reports the share. The feature is not accepted until the name normalisation is improved.
+- **Low match rate.** If the located share is below the minimum threshold (default 95%), the rebuild prints the report and writes the unmatched-cities file. It then exits non-zero, without changing the stored data or exported files (see FR-021).
 
 ## Requirements *(mandatory)*
 
@@ -98,30 +119,55 @@ cities.
 - **FR-001**: The system MUST read the provided fuel price file and trim leading and trailing whitespace from every value.
 - **FR-002**: The system MUST drop every row whose state is a Canadian province or territory code (AB, BC, MB, NB, NL, NS, NT, NU, ON, PE, QC, SK, YT).
 - **FR-003**: The system MUST produce exactly one station per OPIS Truckstop ID among the remaining rows.
-- **FR-004**: The system MUST keep every raw US price row, with its rack ID, raw name and price, linked to its station.
+- **FR-004**: The system MUST keep every raw US price row of every kept station, with its rack ID, raw name and price, linked to that station. Price rows of excluded stations (FR-012) are excluded with them. No price row is ever stored without a station.
 - **FR-005**: The system MUST set each station's effective price to the minimum price across its rows.
-- **FR-006**: The system MUST use the first name spelling seen in the file as the station's display name.
+- **FR-006**: The system MUST use the first name spelling seen in the file as the station's display name, and take the station's address, city and state from its first row. (Verified on the provided file: 0 IDs have rows with a different address, city or state.)
 - **FR-007**: The system MUST store prices exactly as given in the file (up to 8 decimal places), with no rounding at any stage of this feature.
 - **FR-008**: The system MUST give each station the coordinates of its city centre, found by matching (city, state) against an offline gazetteer of US populated places.
 - **FR-009**: The system MUST apply one name-normalisation rule to both gazetteer names and price-file cities: lower case; remove periods and apostrophes; hyphens to spaces; collapse spaces; expand st→saint, ste→sainte, ft→fort, mt→mount; join "mc x" into "mcx".
 - **FR-010**: The system MUST ignore historical, abandoned and destroyed places. It MUST resolve name collisions within a state by highest population, then lowest gazetteer ID. It MUST use alternate names only as a fallback when the primary name does not match.
 - **FR-011**: The system MUST record the coordinate source of every station as "city centre", and leave the match score empty (reserved for the later precision feature).
-- **FR-012**: The system MUST exclude stations whose city cannot be located, and MUST write them (ID, name, city, state) to a reviewable unmatched-cities file.
-- **FR-013**: The system MUST replace previously built data on every rebuild rather than adding to it. Two consecutive rebuilds on the same inputs MUST produce identical stored records, including record identifiers, and an identical exported file.
-- **FR-014**: The system MUST export the stations and their price rows to a shipped, ready-to-load data file, in a stable order (by station ID).
+- **FR-012**: The system MUST exclude stations whose city cannot be located, together with their price rows, and MUST write them (ID, name, city, state) to a reviewable unmatched-cities file. That file is committed with the shipped data, so reviewers can see every dropped station.
+- **FR-013**: The system MUST replace previously built data on every rebuild rather than adding to it. Two consecutive rebuilds on the same inputs MUST produce identical stored records, including record identifiers. All three output files MUST be byte-for-byte identical between runs: the station data file, the unmatched-cities file and the place lookup.
+- **FR-014**: The system MUST write each output in a fixed order:
+  - the station data file (stations and their price rows, shipped and ready to load): ordered by station ID;
+  - the unmatched-cities file: ordered by station ID;
+  - the place lookup: ordered by state, then normalised name, and compressed with a fixed timestamp so the compressed bytes do not change between runs.
 - **FR-015**: Loading the shipped data MUST need one command and no network access, and MUST NOT need the gazetteer file.
 - **FR-016**: The system MUST export a compact, shipped place lookup (normalised name, display name, state, coordinates, population). It MUST cover every populated place with a known population, plus every place matched by a station city.
-- **FR-017**: The rebuild MUST be a single command. It MUST accept the price file and gazetteer locations as optional inputs (with project defaults), and it MUST be able to skip the export step.
+  - The lookup MUST have exactly one row per (normalised name, state): the winner of the FR-010 tie rule. Later "City, ST" lookups therefore resolve exactly as station matching did.
+  - A place matched through an alternate name MUST also get a row under that alternate name.
+- **FR-017**: The rebuild MUST be a single command. It MUST accept these optional inputs:
+  - the price file location (project default);
+  - the gazetteer location (project default);
+  - a minimum located-share threshold in percent (default 95);
+  - a choice to skip the export step.
 - **FR-018**: At the end of a rebuild the system MUST print a report. The report MUST show:
   - rows read;
   - Canadian rows dropped;
-  - US price rows;
+  - US price rows read;
+  - price rows stored (after excluding unlocated stations);
   - stations kept;
   - stations with several prices;
-  - stations located (count and percentage, by coordinate source);
+  - stations located (count and percentage, by coordinate source), with the threshold next to the share (e.g. "Stations located 96.8% (threshold 95%)");
   - stations dropped (with the unmatched-file location);
   - the place lookup's size (places and megabytes).
 - **FR-019**: The rebuild MUST NOT make any network request.
+- **FR-020**: Before writing anything, the rebuild MUST validate the whole price file.
+  - **Missing header column:** if any expected column (OPIS Truckstop ID, Truckstop Name, Address, City, State, Rack ID, Retail Price) is missing or renamed, the rebuild fails immediately.
+  - **Malformed rows:** a row is malformed if:
+    - the OPIS Truckstop ID or Rack ID is missing or not an integer;
+    - the Retail Price is empty, not a valid decimal, zero or negative;
+    - City or State is empty;
+    - the State code is neither a US state/DC nor a Canadian province/territory;
+    - the row shares an OPIS Truckstop ID with another row but has a different City or State. The error lists the conflicting line numbers.
+  - **Error:** if any row is malformed, the rebuild MUST stop with one error and a non-zero exit status. The error lists every problem (line number, column, value, reason), capped at the first 50, plus the total count.
+  - **Stored data:** after a failed validation, the stored data and the exported files MUST be exactly as they were before the run.
+  - **Canadian rows:** these are valid rows, not errors. They are dropped silently and counted in the report.
+- **FR-021**: The rebuild MUST compare the located share with the minimum threshold (FR-017).
+  - **Below the threshold:** print the report, write the unmatched-cities file, exit with a non-zero status, and leave the stored data and exported files exactly as they were.
+  - **At or above the threshold:** save and export as normal.
+  - **Lower threshold:** if the shipped data is built with a threshold below the default, the project documentation MUST state the value used and the reason.
 
 ### Key Entities
 
@@ -134,12 +180,13 @@ cities.
 
 ### Measurable Outcomes
 
-- **SC-001**: On the provided price file, the rebuild reports 8,151 rows read, 620 Canadian rows dropped, 7,531 US price rows and 6,626 stations kept before location. 0 Canadian stations remain.
-- **SC-002**: At least 95% of the 6,626 stations are located. Every dropped station appears in the unmatched-cities file.
+- **SC-001**: On the provided price file, the rebuild reports 8,151 rows read, 620 Canadian rows dropped, 7,531 US price rows read and 6,626 stations kept before location. 0 Canadian stations remain. Stored price rows = 7,531 minus the rows of excluded stations, and every stored price row belongs to a stored station.
+- **SC-002**: At least 95% of the 6,626 stations are located with the default threshold. Every dropped station appears in the unmatched-cities file.
 - **SC-003**: Every one of the 568 stations with several price rows has an effective price equal to the minimum of its rows. A price of 3.00733333 reads back exactly after rebuild and load.
-- **SC-004**: Two consecutive rebuilds produce byte-for-byte identical exported data and identical record identifiers.
-- **SC-005**: A reviewer on a fresh checkout with no network access has all station data available after one load command, and the load takes under 1 minute on a typical laptop.
+- **SC-004**: Two consecutive rebuilds produce identical record identifiers, and byte-for-byte identical copies of all three output files: station data, unmatched cities and place lookup.
+- **SC-005**: A reviewer on a fresh checkout with no network access has all station data available after one load command. The load takes under 1 minute on a typical laptop.
 - **SC-006**: The rebuild from the provided price file completes in under 5 minutes on a typical laptop.
+- **How SC-005 and SC-006 are checked:** they are measured manually, once, on the developer's laptop. The measured times and the machine are recorded in the project documentation (e.g. "Load: 4 s. Full rebuild: 48 s (2018 Intel MacBook Pro)"). They are not automated checks: the rebuild needs the gazetteer, which is not in the repository, and timings on shared build machines vary.
 - **SC-007**: The shipped place lookup is under 10 MB, and the shipped station data is under 50 MB. Both are far below common repository file-size limits.
 
 ## Assumptions
