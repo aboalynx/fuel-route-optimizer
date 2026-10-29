@@ -118,7 +118,7 @@ description: "Task list for Feature 002: Route Candidates"
 
 ### Tests for User Story 2 ⚠️ (write first, show failing)
 
-- [ ] T010 [P] [US2] Write `tests/unit/planner/test_geometry.py` (pure), covering:
+- [X] T010 [P] [US2] Write `tests/unit/planner/test_geometry.py` (pure), covering:
   - **`haversine_miles`:** Dallas (32.78, -96.80) → Chicago (41.88, -87.63) ≈ 804.7 mi great-circle with R = 3958.8 mi (±1); 0 for the same point.
   - **`densify(points, spacing)`:**
     - every original point is kept, in order;
@@ -128,13 +128,13 @@ description: "Task list for Feature 002: Route Candidates"
   - **`cumulative_miles`:** starts at 0 and is non-decreasing; the last value equals the summed haversine.
   - **Unit vectors and chords:** `to_unit_vectors` rows have norm 1; `arc_miles(chord_for_miles(x)) ≈ x`.
   - **`project_onto_segment`** (local equirectangular frame around the station): a point on the segment → distance 0 and the right fraction `t`; a point beyond the end → `t = 1`.
-- [ ] T011 [P] [US2] Write `tests/unit/planner/test_station_index.py` (pure), covering:
+- [X] T011 [P] [US2] Write `tests/unit/planner/test_station_index.py` (pure), covering:
   - `build_station_index(rows)` sorts by `opis_id`;
   - `info` keeps `best_price` as an exact `Decimal` (e.g. `Decimal("3.00733333")`), plus `name`, `address`, `city`, `state` and `geo_source` as `GeoSource`;
   - the tree holds every station;
   - no rows → `StationDataMissing` with the exact message `station data not loaded: run python manage.py loaddata stations`;
   - no Django import (AST check).
-- [ ] T012 [P] [US2] Write `tests/unit/planner/test_corridor.py` (pure; helpers from T003), covering:
+- [X] T012 [P] [US2] Write `tests/unit/planner/test_corridor.py` (pure; helpers from T003), covering:
   - **Straight line:** stations at known miles along a straight 200-mi route → `mile_marker` within 0.05 mi.
   - **Boundary:** with radius 10, a station at a true 9.99 mi off the route is included and one at 10.01 mi is excluded.
   - **On the route:** a station on the route → `off_route_miles == pytest.approx(0, abs=0.01)`.
@@ -146,7 +146,7 @@ description: "Task list for Feature 002: Route Candidates"
   - **Loop:** a route passing a station twice lists it once, at the nearer pass. On equal distance it takes the earlier mile.
   - **Ordering:** two stations at the same mile are ordered by `opis_id`; two calls return identical lists.
   - **Fields:** `price` is the station's exact `Decimal`; no station nearby → `[]`; `corridor_miles` of 0.5 or 26 → `ValueError`.
-- [ ] T013 [P] [US2] Write `tests/integration/test_index_loader.py` (pytest-django), covering:
+- [X] T013 [P] [US2] Write `tests/integration/test_index_loader.py` (pytest-django), covering:
   - after `loaddata tests/fixtures/stations_sample.json`, `get_station_index()` has 3 stations with exact prices;
   - a second call makes **0** queries (`django_assert_num_queries(0)`) and `cache_info().misses == 1`;
   - an empty DB → `StationDataMissing` with the `loaddata` hint, and a later call after `loaddata` succeeds (the exception is not cached);
@@ -155,15 +155,15 @@ description: "Task list for Feature 002: Route Candidates"
 
 ### Implementation for User Story 2
 
-- [ ] T014 [P] [US2] Implement `planner/geometry.py` (numpy; no Django): `haversine_miles`, `densify`, `cumulative_miles`, `to_unit_vectors`, `chord_for_miles`, `arc_miles`, and `project_onto_segment` (local equirectangular frame, `M = π·3958.8/180`). Run T010 green.
-- [ ] T015 [P] [US2] Implement `planner/station_index.py`:
+- [X] T014 [P] [US2] Implement `planner/geometry.py` (numpy; no Django): `haversine_miles`, `densify`, `cumulative_miles`, `to_unit_vectors`, `chord_for_miles`, `arc_miles`, and `project_onto_segment` (local equirectangular frame, `M = π·3958.8/180`). Run T010 green.
+- [X] T015 [P] [US2] Implement `planner/station_index.py`:
   - `StationInfo` (frozen dataclass), `StationIndex` (`opis_ids`, `lat`, `lng`, `vectors`, `tree`, `info`), `StationDataMissing`, and `build_station_index(rows)`;
   - rows are sorted by `opis_id`;
   - a `cKDTree` on the unit vectors;
   - no Django import.
 
   Run T011 green.
-- [ ] T016 [US2] Implement `planner/corridor.py` (depends on T014, T015). Define `Candidate(opis_id, mile_marker, off_route_miles, price)` and `find_candidates(route, index, corridor_miles)`:
+- [X] T016 [US2] Implement `planner/corridor.py` (depends on T014, T015). Define `Candidate(opis_id, mile_marker, off_route_miles, price)` and `find_candidates(route, index, corridor_miles)`:
   - **Radius:** check 1 ≤ r ≤ 25, else `ValueError`.
   - **Densify:** `s = min(1, r/2)`, then `densify`.
   - **Rescale:** `k = route.distance_miles / cum[-1]`. If `k` is outside 0.95–1.05, `logging.getLogger(__name__).warning(...)`.
@@ -172,7 +172,7 @@ description: "Task list for Feature 002: Route Candidates"
   - **Include and sort:** include if `off <= r`; sort by `(mile_marker, opis_id)`.
 
   Run T012 green.
-- [ ] T017 [US2] Implement `stations/services/index_loader.py`. `get_station_index()` is wrapped in `functools.lru_cache(maxsize=1)`:
+- [X] T017 [US2] Implement `stations/services/index_loader.py`. `get_station_index()` is wrapped in `functools.lru_cache(maxsize=1)`:
   - reads `FuelStation.objects.order_by("opis_id").values_list("opis_id", "lat", "lng", "best_price", "name", "address", "city", "state", "geo_source")` once;
   - builds with `build_station_index`;
   - maps empty data to `StationDataMissing`;
@@ -180,7 +180,7 @@ description: "Task list for Feature 002: Route Candidates"
   - is never called from `AppConfig.ready()`.
 
   Run T013 green.
-- [ ] T018 [US2] Run `python -m pytest tests/unit/routing tests/unit/planner tests/integration/test_index_loader.py`. Fix until green.
+- [X] T018 [US2] Run `python -m pytest tests/unit/routing tests/unit/planner tests/integration/test_index_loader.py`. Fix until green.
 
 **Checkpoint**: US1 and US2 both work offline.
 
