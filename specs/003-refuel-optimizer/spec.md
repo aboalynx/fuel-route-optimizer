@@ -8,6 +8,14 @@
 
 **Input**: User description: "merge to main then run specify for next feature 3". The feature content is the Feature 003 Specify input in `docs/implementation-plan.md`: "Given a route of known length, an ordered list of fuel stations along it (mile marker and price per gallon), a vehicle with a fixed miles-per-gallon and maximum range (10 mpg, 500 miles, so a 50-gallon tank), and the fuel in the tank at the start (default full), compute the fuel purchase plan with the lowest total cost that gets the vehicle from start to finish without running dry. The plan lists each stop in route order with gallons bought and cost; stops where nothing is bought are omitted. It returns total gallons consumed, gallons purchased and total cost. Fuel can only be bought at stations (not at the start or finish), in any fractional amount, and the tank never exceeds capacity. Money is exact and rounded to cents only for display. Ties between equally priced stations follow a fixed, documented rule. If any stretch of the route (including from the start with the given start fuel) is longer than the vehicle can cover, the plan is infeasible and the result says where the gap starts and ends. Optional extra (lowest priority; the first optimizer extra to drop if time is short): a safety reserve in gallons (default 0, range 0-25) that the vehicle never dips below. The start fuel must be at least the reserve. Acceptance: a trip under 500 miles with a full tank has no stops and zero cost; when a cheaper station is within range the vehicle buys only enough to reach it; when the finish is within range and no cheaper station precedes it, the vehicle buys only enough to reach the finish; fuel balance holds (start + purchased - left = distance / mpg); on small random instances the cost equals a brute-force optimum; with a reserve of 5 gallons, no leg between consecutive fuel points exceeds 450 miles."
 
+## Clarifications
+
+### Session 2026-10-29
+
+- Q: What range of start fuel should the planner accept, and should a 5-gallon safety margin apply by default? → A: Start fuel is optional and defaults to a full tank (50 gal); 0 to tank capacity is accepted. There is no safety margin by default, so the range is the assignment's 500 miles. The 5-gallon margin is the optional reserve (0–25, default 0) that the caller can turn on. A start fuel that cannot reach the first fuel point is reported as infeasible with full details: start fuel, the miles it covers, the miles to the next fuel point and the gallons short.
+- Q: When several stations within range share the same lowest price, which one should the truck go to? → A: An equal price is not cheaper. Among the equally cheapest stations in range, the farthest is chosen, then the lowest station ID.
+- Q: How should the total cost be rounded to cents relative to the cost of each stop? → A: Each stop's cost is computed exactly and rounded half up to cents; the total is the sum of the rounded stop costs, so the stops always add up to the total shown. Prices stay exact (up to 8 decimal places, as stored) and are never rounded to cents before multiplying.
+
 ## User Scenarios & Testing *(mandatory)*
 
 The users of this feature are the route-plan endpoint (Feature 004), which passes it the candidate
@@ -37,7 +45,7 @@ against an exhaustive search for the cheapest plan.
 3. **Given** the vehicle is at a station with no cheaper station within range and the finish beyond range, **When** a plan is requested, **Then** it fills the tank there and drives to the cheapest station within range.
 4. **Given** the finish is within range and no cheaper station comes before it, **When** a plan is requested, **Then** the vehicle buys only enough to reach the finish, so it does not finish with fuel it paid for but did not need.
 5. **Given** any feasible plan, **When** it is returned, **Then** fuel balance holds exactly: start fuel + gallons bought − fuel left = route length ÷ mpg.
-6. **Given** two stations at the same lowest price within range, **When** the planner picks where to go next, **Then** it follows the documented tie rule, and the same input always gives the same plan.
+6. **Given** two stations at the same lowest price within range, at miles 200 and 300, **When** the planner picks where to go next, **Then** it goes to the one at mile 300 (the farthest); if both are at the same mile, the lower station ID wins, and the same input always gives the same plan.
 7. **Given** small random trips (a handful of stations, whole-number miles and prices), **When** a plan is requested, **Then** its total cost equals the cheapest cost found by an exhaustive search, on every one of about 50 fixed (seeded) cases.
 8. **Given** a station price with more than two decimal places (for example $3.00733333), **When** costs are computed, **Then** they are exact; rounding to cents happens only for the reported stop costs, and the total cost is the sum of the rounded stop costs.
 
@@ -61,7 +69,7 @@ start fuel, check that the result is "infeasible" with the right reason and gap 
 
 1. **Given** stations at miles 100 and 700 on an 800-mile route, **When** a plan is requested, **Then** it is infeasible because of a station gap from mile 100 to mile 700.
 2. **Given** a 900-mile route with no stations at all, **When** a plan is requested, **Then** it is infeasible because of a station gap from mile 0 to mile 900.
-3. **Given** a start fuel of 10 gallons (100 miles) and the first station at mile 150, **When** a plan is requested, **Then** it is infeasible because the start fuel is insufficient, from mile 100 (where the fuel would run out) to mile 150 (the next fuel point).
+3. **Given** a start fuel of 10 gallons (100 miles) and the first station at mile 150, **When** a plan is requested, **Then** it is infeasible because the start fuel is insufficient, from mile 100 (where the fuel would run out) to mile 150 (the next fuel point). The result also states the start fuel (10 gal), the miles it covers (100), the miles to the next fuel point (150) and the gallons short (5).
 4. **Given** a start fuel of 0 and a station at mile 0, **When** a plan is requested, **Then** the vehicle buys fuel there and the trip can proceed. With a start fuel of 0 and no station at mile 0, the trip is infeasible because the start fuel is insufficient.
 5. **Given** an infeasible trip, **When** the result is returned, **Then** no plan, stops or cost are returned with it.
 
@@ -112,9 +120,9 @@ the finish is at least the reserve.
 - **FR-006**: The plan MUST report the total gallons consumed (route length ÷ mpg), the total gallons purchased, the total cost and the fuel left at the finish. Fuel balance MUST hold exactly: start fuel + purchased − left = consumed.
 - **FR-007**: When the vehicle is at a fuel point and a strictly cheaper station lies within range, it MUST buy only enough to reach the first such station. When none does and the finish is within range, it MUST buy only enough to reach the finish. Otherwise it MUST fill the tank and continue to the cheapest station within range.
 - **FR-008**: Ties MUST follow one fixed, documented rule: an equal price is not cheaper; among equally cheapest stations within range, the farthest is chosen, then the lowest station ID. The same input MUST always give the same plan.
-- **FR-009**: Money MUST be computed exactly from the stations' unrounded prices. Each stop's cost MUST be rounded to whole cents (half up) only when reported, and the total cost MUST be the sum of the rounded stop costs, so the stops always add up to the total shown.
+- **FR-009**: Money MUST be computed exactly from the stations' unrounded prices (up to 8 decimal places); prices are never rounded to cents before multiplying by gallons. Each stop's cost MUST be rounded to whole cents (half up) only when reported, and the total cost MUST be the sum of the rounded stop costs, so the stops always add up to the total shown.
 - **FR-010**: If any stretch between consecutive fuel points (the start, each station, the finish) is longer than the vehicle's range, the system MUST report the trip as infeasible with the reason "station gap" and the start and end of the gap in miles. It MUST NOT return a partial plan.
-- **FR-011**: If the start fuel cannot reach the first fuel point the vehicle needs, the system MUST report the trip as infeasible with the reason "start fuel insufficient", giving the mile where the fuel would run out and the mile of that next fuel point.
+- **FR-011**: If the start fuel cannot reach the first fuel point the vehicle needs, the system MUST report the trip as infeasible with the reason "start fuel insufficient", giving the mile where the fuel would run out (the gap start) and the mile of that next fuel point (the gap end). The result MUST also state the start fuel in gallons, the miles it covers, the miles to the next fuel point and the gallons short, so a user or developer can see why without re-computing it.
 - **FR-012** *(optional; first extra to drop)*: The system MUST accept a reserve of 0 to 25 gallons (default 0) that the tank never drops below. The start fuel MUST be at least the reserve, otherwise the request is invalid input. With a reserve, the usable capacity is capacity − reserve, so the effective range is (capacity − reserve) × mpg; a reserve of 0 MUST give exactly the plan without a reserve.
 - **FR-013**: The optimizer MUST make no external calls and read no stored data. It works only on the values it is given, so it can be tested on its own and gives the same answer every time.
 - **FR-014**: Input that cannot describe a real trip (negative length, station mile markers outside the route, stations out of route order, non-positive mpg or range, negative prices) MUST be rejected as invalid input, distinct from an infeasible route.
@@ -125,7 +133,7 @@ the finish is at least the reserve.
 - **Station stop candidate**: a station ID, its mile marker along the route and its exact price per gallon (the candidate shape from Feature 002; the off-route distance is not used here).
 - **Fuel purchase**: one stop in the plan: station ID, mile marker, price per gallon, gallons bought and cost.
 - **Fuel plan**: the ordered purchases, total gallons consumed, total gallons purchased, total cost and fuel left at the finish.
-- **Infeasible route**: the result when the trip cannot be completed: a reason ("station gap" or "start fuel insufficient") and the start and end mile of the gap.
+- **Infeasible route**: the result when the trip cannot be completed: a reason ("station gap" or "start fuel insufficient"), the start and end mile of the gap, and, for "start fuel insufficient", the start fuel, the miles it covers, the miles to the next fuel point and the gallons short.
 
 ## Success Criteria *(mandatory)*
 
@@ -145,5 +153,6 @@ the finish is at least the reserve.
 - **Inputs.** Candidates come from Feature 002, already sorted by mile marker then station ID, with exact prices from Feature 001. The route length is the routing service's distance.
 - **Start fuel.** The vehicle starts with a full tank unless told otherwise (constitution, Principle VI).
 - **Prices.** A station's price is its effective price from Feature 001 (the minimum when a station appears more than once).
-- **Infeasible versus invalid.** "Infeasible" means the inputs are valid but the trip cannot be completed; Feature 004 decides how each is shown to the user (for example 422 versus 400).
+- **Infeasible versus invalid.** "Infeasible" means the inputs are valid but the trip cannot be completed; "invalid" means the inputs cannot describe a real trip. Feature 004 maps them to HTTP 422 and 400 respectively, with the reason and the details in the response body.
+- **No default safety margin.** The assignment fixes the range at 500 miles, so the reserve defaults to 0. The README notes that a production default of 5 gallons would be sensible, and the demo shows a request with a 5-gallon reserve.
 - **Out of scope.** Finding stations along the route (Feature 002); the HTTP endpoint, error mapping and map (Feature 004); a minimum saving per stop (future work).
