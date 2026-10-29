@@ -190,7 +190,7 @@ FIRST USE: stations + KD-tree loaded into memory once (lazy, lru_cache)
 | `stations/pipeline/osm.py`, `matching.py` | Overpass fetch with disk cache; name cleaning and fuzzy matching (Feature 005) | No |
 | `stations/services/station_data.py` | Rebuild service: runs the pure pipeline, stores atomically, exports the fixture, place lookup and unmatched file | Yes |
 | `stations/management/commands/build_station_data.py` | Thin: parses flags, calls the rebuild service, prints the report, maps errors to exit codes | Yes |
-| `stations/services/station_index.py` | Station index service: in-memory station arrays + KD-tree, built lazily once | Reads the model once |
+| `stations/services/station_index.py` | Station index service: in-memory arrays (ID, coordinates, exact price, name, address, city, state, `geo_source`) + KD-tree, built lazily once; raises `StationDataMissing` when empty | Reads the model once; restart for new data |
 | `routing/base.py`, `routing/osrm.py` | `RoutingProvider` protocol, OSRM provider, error mapping | Settings only |
 | `planner/geometry.py`, `planner/corridor.py` | Haversine, resampling, unit vectors, corridor search | No |
 | `planner/optimizer.py` | The refuelling algorithm (pure function) | No |
@@ -572,42 +572,58 @@ Decided details (no clarify step needed):
 
 ```text
 routing/base.py: LatLng and Route dataclasses (points, distance_miles: float, provider: str),
-RoutingProvider Protocol route(start, finish) -> Route, RoutingUnavailable, get_provider() reading
-settings.ROUTING_PROVIDER. routing/osrm.py: httpx GET
+RoutingProvider Protocol route(start, finish) -> Route, RoutingUnavailable(reason,
+retry_after_seconds: int | None), RoutingFailure StrEnum (TIMED_OUT, NETWORK_ERROR, SERVER_ERROR,
+RATE_LIMITED, INVALID_RESPONSE, NO_ROUTE, NOT_NEAR_ROAD) per the enum rule, get_provider() reading
+settings.ROUTING_PROVIDER (unknown name -> clear error listing allowed names).
+routing/osrm.py: one httpx GET (no retries) to
 {OSRM_BASE_URL}/route/v1/driving/{lng},{lat};{lng},{lat}?overview=full&geometries=geojson
-(lng,lat order!), timeout settings.ROUTING_TIMEOUT_SECONDS; map httpx errors / non-200 /
-code != "Ok" / empty routes to RoutingUnavailable; meters / 1609.344 = miles; GeoJSON [lng, lat] ->
-LatLng(lat, lng). planner/geometry.py (pure numpy): haversine_miles, resample by interpolation,
-cumulative miles rescaled to the provider distance, to_unit_vectors, chord_for_miles.
+(lng,lat order!), httpx.Timeout(settings.ROUTING_TIMEOUT_SECONDS) so the limit applies to connect
+and to each read; map timeouts / network errors / 5xx / invalid JSON / code != "Ok" / empty routes
+to RoutingUnavailable; HTTP 429 -> RATE_LIMITED with retry_after_seconds from an integer
+Retry-After header, capped at 60 (missing or HTTP-date -> None); waypoints[].distance > 5 miles
+(8046.72 m) -> NOT_NEAR_ROAD; meters / 1609.344 = miles; GeoJSON [lng, lat] -> LatLng(lat, lng).
+planner/geometry.py (pure numpy): haversine_miles, resample by interpolation, cumulative miles,
+to_unit_vectors, chord_for_miles, local equirectangular segment projection.
 planner/corridor.py: find_candidates(route_points, distance_miles, index, corridor_miles) ->
-list[Candidate(opis_id, mile_marker, off_route_miles)], default settings.CORRIDOR_MILES.
-stations/services/station_index.py: lru_cache'd get_station_index() built lazily on first use (optionally warmed in
-config/wsgi.py) — never query the DB in AppConfig.ready() (Django 5.0+ warns, and it runs during
-migrate). cKDTree on 3D unit vectors; query_ball_point with chord(r + s/2); nearest dense route
-point via a per-request route cKDTree; sort by (mile_marker, opis_id). Algorithm:
-docs/algorithms/route-corridor-search.md; decision: docs/adr/0002. Tests: respx with a recorded
-OSRM fixture tests/fixtures/osrm_dallas_chicago.json; synthetic routes for geometry.
+list[Candidate(opis_id, mile_marker, off_route_miles, price: Decimal)]; radius 1-25 (default
+settings.CORRIDOR_MILES); gather with query_ball_point(chord(r + s/2)), then measure each candidate
+exactly against the segments adjacent to its nearby samples (exact off-route distance and mile
+marker rescaled to the provider distance); include iff off <= r; sort by (mile_marker, opis_id).
+stations/services/station_index.py: lru_cache'd get_station_index() built lazily on first use
+(never in AppConfig.ready()); holds opis_id, lat, lng, best_price (Decimal), name, address, city,
+state, geo_source + the cKDTree; empty index or missing tables -> StationDataMissing("station data
+not loaded: run python manage.py loaddata stations"); tests reset it with cache_clear(); new
+station data needs a restart. Algorithm: docs/algorithms/route-corridor-search.md; decision:
+docs/adr/0002 (amended). Tests: respx with a recorded OSRM fixture
+tests/fixtures/osrm_dallas_chicago.json; synthetic routes for geometry.
 ```
 
 **Tests:**
 
 - **Routing:**
-  - the URL has `lng,lat` order;
-  - meters → miles;
-  - GeoJSON is parsed into `LatLng(lat, lng)`;
-  - timeout, HTTP 5xx and `NoRoute` → `RoutingUnavailable`;
-  - the factory reads `ROUTING_PROVIDER` and rejects unknown values.
+  - the URL has `lng,lat` order; meters → miles; GeoJSON is parsed into `LatLng(lat, lng)`;
+  - timeout, network error, HTTP 5xx, invalid JSON and `NoRoute` → `RoutingUnavailable`, each with exactly 1 call (no retries);
+  - HTTP 429 → `rate limited`: `Retry-After: 2` → 2; no header → `None`; `Retry-After: 3600` → 60; always 1 call;
+  - a waypoint snapped more than 5 miles → `start/finish not near a road`;
+  - the factory reads `ROUTING_PROVIDER` and rejects unknown names, listing the allowed ones.
 - **Corridor:**
-  - mile markers on a synthetic line;
-  - radius boundary in/out;
-  - a sparse two-point route still finds a mid-segment station (proves resampling);
+  - mile markers on a synthetic straight line within 0.05 mile;
+  - boundary: a true 9.99 miles is included and 10.01 miles excluded;
+  - a station on the route reads 0 (within 0.01 mile);
+  - a sparse two-point route still finds a mid-segment station;
   - the radius is honoured in miles in both Texas and Montana;
   - the last mile marker equals the provider distance;
-  - ordering is stable;
-  - the index is built lazily and once;
-  - a timing smoke test (not strict in CI).
+  - a looping route lists a station once, at the nearest pass (earliest on ties);
+  - ordering is stable; candidates carry the exact `Decimal` price;
+  - radius outside 1–25 → error.
+- **Station index:**
+  - built lazily, once, and reset in tests with `cache_clear()`;
+  - holds price, name, address and `geo_source`, with no database query per search;
+  - empty data → `StationDataMissing` with the `loaddata` hint (never an empty list).
+- **Timing:** a smoke test, not strict in CI.
 
-**Done when:** a mocked call returns a `Route`, candidates are correct on synthetic routes, one manual OSRM call works, and the timing for a long route is noted for the README.
+**Done when:** a mocked call returns a `Route`, candidates are exact on synthetic routes (0.05 mile, on-route = 0, the 9.99/10.01 boundary), one manual OSRM call (Dallas → Chicago) works, and the timing for a long route is noted for the README.
 
 ---
 

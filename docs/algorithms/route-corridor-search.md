@@ -1,50 +1,92 @@
 # Algorithm: route corridor search and mile-marker projection
 
-Modules `planner/geometry.py`, `planner/corridor.py`, `stations/services/station_index.py` · Feature 002 · [ADR-0002](../adr/0002-kdtree-corridor-search.md)
+Modules `planner/geometry.py`, `planner/corridor.py`, `stations/services/station_index.py` · Feature 002 · [ADR-0002](../adr/0002-kdtree-corridor-search.md) · [spec](../../specs/002-route-candidates/spec.md)
 
 ## Context
 
 The router returns a polyline (thousands of points) and a distance `D`. From ~6,600 in-memory
-stations we need those within `r = CORRIDOR_MILES` (default 10) of the route. For each one we need
-its mile marker (distance along the route) and its off-route distance. All of this must take
-milliseconds, with no external calls.
+stations we need those within `r = CORRIDOR_MILES` (default 10, allowed 1–25) of the route. For each
+one we need:
 
-## Decision
+- its mile marker (distance along the route);
+- its off-route distance;
+- its price.
+
+Requirements:
+
+- accuracy of 0.05 mile, and a station on the route must read 0 (spec FR-011, clarified 2026-10-29);
+- milliseconds per request, no external calls, no database query.
+
+## Decision: gather on samples, then measure exactly
 
 ```text
-startup (lazy, lru_cache'd get_station_index(); never in AppConfig.ready()):
-    station_vectors = unit_vectors(lat, lng); station_tree = cKDTree(station_vectors)
+first use (lazy, lru_cache'd get_station_index(); never in AppConfig.ready()):
+    index = arrays of opis_id, lat, lng, best_price (Decimal), name, address, city, state, geo_source
+    station_tree = cKDTree(unit_vectors(lat, lng))
+    empty index (or missing tables) -> raise StationDataMissing
 
 per request:
-    dense  = resample(polyline, s = min(1 mi, r/2))      # interpolate, don't just down-sample
-    cum    = cumulative haversine miles; cum *= D / cum[-1]   # same scale as the optimizer's D
+    s      = min(1 mi, r/2)
+    dense  = resample(polyline, s)                       # interpolate, don't just down-sample
+    cum    = cumulative haversine miles of dense;  k = D / cum[-1]
+    # 1. gather: no station within r can be missed
     hits   = station_tree.query_ball_point(unit_vectors(dense), chord(r + s/2))
-    k, d   = cKDTree(unit_vectors(dense)).query(station_vectors[hits])
-    return sorted(Candidate(opis_id, cum[k], arc_miles(d)), key=(mile_marker, opis_id))
+    route_tree = cKDTree(unit_vectors(dense))
+    # 2. measure each candidate exactly against the route itself
+    for station in hits:
+        d0     = distance to its nearest dense point
+        nearby = dense points within d0 + s           # covers loops passing the station twice
+        for each segment (i, i+1) touching a nearby point:
+            project the station onto the segment in a local equirectangular frame
+            off  = distance from the station to the projected point
+            mile = (cum[i] + t * len_i) * k             # t in [0, 1] along the segment
+        keep the (off, mile) with the smallest off; ties -> smallest mile
+    # 3. include if and only if off <= r
+    return sorted(Candidate(opis_id, mile, off, price), key=(mile_marker, opis_id))
 ```
+
+**Local equirectangular frame** around the station (lat₀, lng₀), with `M = π·R_E/180` ≈ 69.09 mi per
+degree:
+
+- `x = (lng − lng₀)·cos(lat₀)·M`
+- `y = (lat − lat₀)·M`
+
+The station is the origin. Its projection onto segment A→B is
+`t = clamp(−A·(B−A)/|B−A|², 0, 1)`, and `off = |A + t(B−A)|`. Over 1-mile segments within about
+11 miles of the station, the error from this flat approximation is far below 0.01 mile.
+
+**Other formulas** (`R_E = 3958.8` mi):
 
 - `unit_vectors(φ, λ) = (cos φ cos λ, cos φ sin λ, sin φ)`
 - `chord(r) = 2·sin(r / 2R_E)`
-- `arc_miles(c) = 2·R_E·asin(c/2)`, with `R_E = 3958.8` mi
+- `arc_miles(c) = 2·R_E·asin(c/2)`
 
-Points are embedded in 3D because a radius in degrees is wrong. A degree of longitude is ~59 mi in
-Texas but ~47 mi in Montana, so the corridor would be about 20% narrower in the north.
+**Why each step:**
 
-Resampling matters because interstate vertices can be 20+ miles apart, and a station near a segment's
-midpoint would otherwise be missed. Querying with `r + s/2` guarantees no misses. Mile-marker and
-off-route errors stay at or below `s/2` (0.5 mi).
+- **3D unit vectors for the gather.** A radius in degrees is wrong: a degree of longitude is ~59 mi
+  in Texas and ~47 mi in Montana.
+- **Resampling.** Interstate vertices can be 20+ miles apart.
+- **Gathering with `r + s/2`.** No station within `r` is missed.
+- **The exact step.** It removes the sampling error. A station on the route reads 0 instead of up to
+  `s/2`, and mile markers are exact along the polyline.
+- **Inclusion on the exact distance.** It makes the boundary sharp: a true 9.99 mi is in and
+  10.01 mi is out.
 
 ## Rejected alternatives
 
-- A brute-force distance matrix: 20M haversines per request is too slow.
-- A KD-tree on raw lat/lng: distorted by latitude.
-- A haversine BallTree: adds scikit-learn.
+- Brute-force distance matrix (20M haversines per request): too slow.
+- KD-tree on raw lat/lng: distorted by latitude.
+- Nearest-sample distance as the answer (the original design): up to 0.5 mi error, and on-route
+  stations read 0.5 instead of 0.
+- Haversine BallTree: adds scikit-learn.
 - PostGIS: breaks the zero-setup run; it is the production path.
-- A per-request Overpass query: a second external call, and it has no OPIS IDs.
+- Per-request Overpass query: a second external call, and no OPIS IDs.
 
 ## Consequences
 
-- Exact in miles everywhere, and fast (a few ms on a coast-to-coast route).
-- Deterministic ordering.
-- Mile markers carry ≤ 0.5 mi error. On a route that loops back, a station takes its earliest nearest point.
-- The index is rebuilt only on process restart, which is fine for static data.
+- Exact to well under 0.05 mi, in miles at every latitude, deterministic, and fast. The refine step
+  touches only a few segments per candidate (a few hundred candidates per route).
+- On a route that loops back, the nearest pass wins, and ties go to the earliest mile marker.
+- The index is built once on first use and holds everything later features need (price, name, address,
+  `geo_source`), so the request path never queries the database.
+- New station data needs a process restart (spec FR-013). Tests reset the index with `cache_clear()`.
