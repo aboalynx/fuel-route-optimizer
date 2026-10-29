@@ -6,7 +6,13 @@
 
 **Status**: Draft
 
-**Input**: User description: "ok merge then run specify for next feature". The feature content is the Feature 004 Specify input in `docs/implementation-plan.md` (endpoint, map page, error statuses, acceptance and decided details), updated for what Features 002 and 003 shipped: the optional reserve shipped in 003, so it is part of the request; an impossible trip (station gap or start fuel too low) returns 422 with the details 003 provides.
+**Input**: User description: "ok merge then run specify for next feature". The feature content is the Feature 004 Specify input in `docs/implementation-plan.md` (endpoint, map page, error statuses, acceptance and decided details), updated for what Features 002 and 003 shipped: the optional reserve shipped in 003, so it is part of the request; an impossible trip (station gap or start fuel too low) returns 422 with the details 003 provides. Added at the user's request: a minimum saving per stop, so the plan does not stop for a few cents (User Story 6).
+
+## Clarifications
+
+### Session 2026-10-29
+
+- Q: Should the plan avoid stops that save only a few cents? → A: Yes. A stop stays in the plan only if dropping it would raise the total cost by at least a minimum saving (default $5, adjustable per request, 0 turns the rule off). Only the plan's own stops are considered for dropping, never other stations, so the extra cost is bounded and visible in the response. On the real Dallas → Chicago route this turns 4 stops ($134.64) into 2 stops ($134.81).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -119,6 +125,33 @@ optional and the first thing to drop if time is short.
 
 ---
 
+### User Story 6 - Skip stops that barely save money (Priority: P2)
+
+A purely cost-optimal plan can tell the driver to stop for 1.3 gallons to save 10 cents, because it
+counts only fuel cost, not the time and hassle of a stop. The dispatcher sets a minimum saving per
+stop (default $5): a stop stays in the plan only if dropping it would cost at least that much more.
+The response says how many stops were dropped and how much more the plan costs than the cheapest
+possible plan, so the trade-off is visible.
+
+**Why this priority**: the real Dallas → Chicago plan has 4 stops, two of which save 7 and 10 cents.
+With the rule it has 2 stops for 17 cents more, which is what a driver would actually do. The brief
+says "optimal mostly means cost effective", which leaves room for this.
+
+**Independent Test**: with hand-made station lists (no network), check which stops are dropped for a
+given minimum saving, that every remaining stop saves at least that much, and that a minimum of 0
+gives the cheapest plan unchanged.
+
+**Acceptance Scenarios**:
+
+1. **Given** a cheapest plan with a stop that saves $0.10, **When** the minimum saving is $5, **Then** that stop is dropped, the gallons are bought at the other stops, and the response shows 1 stop dropped and the extra cost ($0.10 or less).
+2. **Given** any plan returned with a minimum saving of X, **When** any one of its stops is removed (keeping the others), **Then** the plan either becomes impossible or costs at least X more.
+3. **Given** a minimum saving of 0, **When** the request is sent, **Then** the plan is exactly the cheapest plan (as in Feature 003) and the response shows 0 stops dropped and $0.00 extra.
+4. **Given** a stop that cannot be dropped because the remaining stops could not get the truck to the finish, **When** the minimum saving is high, **Then** the stop stays, however little it saves.
+5. **Given** two stops that save the same small amount, **When** one must be dropped first, **Then** the one with the smaller saving goes first, then the earlier mile, then the lower station ID, so the result is always the same.
+6. **Given** a minimum saving outside 0–100 dollars, **When** the request is sent, **Then** 400 `invalid_input`.
+
+---
+
 ### Edge Cases
 
 - **Long routes.** A coast-to-coast route can have tens of thousands of points; the map line is thinned for the response (at most about 5,000 points) while stops, distance and costs come from the full route.
@@ -127,17 +160,18 @@ optional and the first thing to drop if time is short.
 - **Same city twice.** "Dallas, TX" to "Dallas, TX" is `same_location`, not a zero-length plan.
 - **Routing service down.** Requests fail fast with 503 within the routing timeout; nothing is cached.
 - **Cache and plan inputs.** The cache stores the route only, never the plan, so a cached route with different start fuel, radius or reserve gives the plan for those values.
-- **Close stops.** A purely cost-optimal plan can include two stops close together for a small saving (documented future work: a minimum saving per stop).
+- **Close stops.** Stops that save less than the minimum saving are dropped (User Story 6). The rule only removes stops from the cheapest plan; it never looks for a different set of stations, so it gives fewer stops, not always the fewest possible. With 0 it is off.
+- **Dropping the last needed stop.** A stop that the trip cannot do without is never dropped, whatever the threshold.
 
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
 
-- **FR-001**: The system MUST expose one route-planning endpoint that accepts a start and a finish, each either a "City, ST" string or a latitude/longitude pair, plus optional start fuel (gallons, 0 to tank capacity, default full), corridor radius (miles, 1–25, default 10) and reserve (gallons, 0–25, default 0).
+- **FR-001**: The system MUST expose one route-planning endpoint that accepts a start and a finish, each either a "City, ST" string or a latitude/longitude pair, plus optional start fuel (gallons, 0 to tank capacity, default full), corridor radius (miles, 1–25, default 10), reserve (gallons, 0–25, default 0) and minimum saving per stop (USD, 0–100, default 5).
 - **FR-002**: "City, ST" MUST be resolved locally from the shipped place data, case-insensitively, with a 2-letter state code. A full state name or unknown city MUST return `location_not_found`; the message for a non-2-letter state MUST say a 2-letter code is expected.
 - **FR-003**: Coordinates MUST be accepted as inside the USA only when the nearest known US populated place is within 25 miles; otherwise, and for a non-US state code, the response MUST be `location_outside_us`.
 - **FR-004**: Each request MUST make at most one external routing call, and none when the same route (same provider and start/finish coordinates rounded to 4 decimal places) was fetched successfully in the last 24 hours. A cached route MUST NOT change the plan, and failures MUST NOT be cached.
-- **FR-005**: A successful response MUST contain: the resolved start and finish (query and coordinates); a summary with distance in miles, total gallons consumed, gallons purchased, total fuel cost in USD, number of stops and the assumptions used (mpg, range, tank capacity, start fuel, corridor radius, reserve); the stops in route order with sequence number, station ID, name, address, city, state, coordinates, coordinate source, mile marker, distance off route, price per gallon, gallons and cost; a GeoJSON feature collection with the route line and one numbered point per stop; and metadata with the routing provider, the number of external routing calls, whether the route was cached, the number of candidate stations considered and per-step timings in milliseconds.
+- **FR-005**: A successful response MUST contain: the resolved start and finish (query and coordinates); a summary with distance in miles, total gallons consumed, gallons purchased, total fuel cost in USD, number of stops the number of stops dropped and the extra cost compared with the cheapest plan, and the assumptions used (mpg, range, tank capacity, start fuel, corridor radius, reserve, minimum saving per stop); the stops in route order with sequence number, station ID, name, address, city, state, coordinates, coordinate source, mile marker, distance off route, price per gallon, gallons and cost; a GeoJSON feature collection with the route line and one numbered point per stop; and metadata with the routing provider, the number of external routing calls, whether the route was cached, the number of candidate stations considered and per-step timings in milliseconds.
 - **FR-006**: Money in responses MUST be numbers rounded half up to cents; each stop's cost and the total MUST match the optimizer's values, so the stop costs add up to the total exactly. Field names MUST carry units (for example `distance_miles`, `total_fuel_cost_usd`).
 - **FR-007**: The same request MUST always return the same plan (stops, gallons, costs, totals).
 - **FR-008**: Every error MUST return the body `{"error": {"code", "message", "details"}}` with a stable code from a fixed set: `invalid_input` (400), `location_not_found` (400), `location_outside_us` (400), `same_location` (400), `infeasible_route` (422), `routing_unavailable` (503), and a station-data-missing code (503).
@@ -145,12 +179,13 @@ optional and the first thing to drop if time is short.
 - **FR-010**: `routing_unavailable` MUST include the routing reason and a retry hint (a `Retry-After` header): the service's suggested wait when it gave one, otherwise a default of 30 seconds.
 - **FR-011**: The map line MUST be thinned to at most about 5,000 points for the response, keeping the first and last points; distances, stops and costs MUST come from the full route.
 - **FR-012**: A web page MUST let a user enter a start and finish and show the route on an OpenStreetMap map with numbered stop markers (name, price, gallons, cost), a summary panel (distance, total cost, stops, routing calls, total time) and readable error messages, with no API key and no frontend build step.
+- **FR-015**: Starting from the cheapest plan, the system MUST repeatedly drop the stop whose removal raises the total cost the least (ties: smaller saving, then earlier mile, then lower station ID), as long as that increase is below the minimum saving per stop and the trip stays possible without it, re-planning over the remaining stops each time. Only the plan's own stops may be dropped; no other station is brought in. Every stop in the returned plan MUST either save at least the minimum or be needed to finish. A minimum of 0 MUST return the cheapest plan unchanged. Money stays exact, with the same rounding as Feature 003.
 - **FR-013** *(optional; first to drop)*: The endpoint MAY also accept the same inputs as query parameters on a GET request, returning the same response as the POST.
 - **FR-014**: All endpoint behaviour MUST be testable without network access (recorded routing responses, a small station fixture).
 
 ### Key Entities
 
-- **Route plan request**: start, finish (each "City, ST" or coordinates), start fuel, corridor radius, reserve.
+- **Route plan request**: start, finish (each "City, ST" or coordinates), start fuel, corridor radius, reserve, minimum saving per stop.
 - **Resolved location**: the original query and the coordinates used.
 - **Route plan response**: resolved start and finish, summary, stops, map feature collection, metadata.
 - **Fuel stop**: sequence, station identity and location, mile marker, distance off route, price per gallon, gallons, cost.
@@ -166,12 +201,14 @@ optional and the first thing to drop if time is short.
 - **SC-003**: In every successful test response, the stop costs add up to the total fuel cost exactly.
 - **SC-004**: A repeated (cached) Dallas → Chicago request is answered in under 100 ms on a typical laptop, and a first request in about the routing service's response time plus under 100 ms of local work; measured by hand and recorded in the README.
 - **SC-005**: One real Dallas → Chicago request works end to end locally, and the map page renders Dallas → Chicago and New York → Los Angeles with their stops (checked by hand).
+- **SC-007**: On the real Dallas → Chicago route with the default minimum saving, the plan has no stop that saves less than $5 unless the trip needs it, and costs at most a few dollars more than the cheapest plan (prototype: 2 stops, $0.17 more); recorded in the README.
 - **SC-006**: A reviewer can run the API and the map page from a fresh clone with no API key and no frontend build.
 
 ## Assumptions
 
 - **Building blocks.** Location resolution data comes from Feature 001's place lookup; the route and candidates from Feature 002; the plan and infeasible details from Feature 003.
 - **Cache.** The route cache is the in-process cache allowed by constitution Principle VII; each server process has its own. A shared cache is future work.
+- **Minimum saving per stop.** The default of $5 roughly prices 10–15 minutes of a driver's time; it is a setting and a request field, and 0 turns the rule off. The rule gives fewer stops, not always the fewest: a plan with fewer stops using other stations could exist; finding it exactly needs a slower search over stations and fuel levels (future work).
 - **Retry hint.** When the routing service suggests no wait, the retry hint is 30 seconds.
 - **Inputs.** Coordinates are decimal degrees (latitude −90..90, longitude −180..180); "City, ST" uses US 2-letter state codes (DC included).
-- **Out of scope.** Authentication and rate limiting of this API, a minimum saving per stop, a truck routing profile, live prices and exact station coordinates (Feature 005).
+- **Out of scope.** Authentication and rate limiting of this API, a truck routing profile, live prices and exact station coordinates (Feature 005).
