@@ -27,8 +27,8 @@ hand-made fixture. The real shipped fixture is produced by US2's real run (T031)
 
 **Purpose**: Missing packages, output folders and shared test fixtures
 
-- [ ] T001 Create `tests/unit/stations/__init__.py` (empty), and create the output folders `data/places/` and `data/reports/`, each with a `.gitkeep`
-- [ ] T002 [P] Create `tests/fixtures/sample_fuel.csv`. Use the real header `OPIS Truckstop ID,Truckstop Name,Address,City,State,Rack ID,Retail Price` and about 20 rows covering:
+- [X] T001 Create `tests/unit/stations/__init__.py` (empty), and create the output folders `data/places/` and `data/reports/`, each with a `.gitkeep`
+- [X] T002 [P] Create `tests/fixtures/sample_fuel.csv`. Use the real header `OPIS Truckstop ID,Truckstop Name,Address,City,State,Rack ID,Retail Price` and about 20 rows covering:
   - 2 Canadian rows (`ON`, `QC`);
   - one ID with an exact duplicate row (same price);
   - one ID with 3 rows at different prices, one of them `3.00733333`;
@@ -36,8 +36,8 @@ hand-made fixture. The real shipped fixture is produced by US2's real run (T031)
   - city values with trailing spaces;
   - the cities `St. Louis, MO`, `Mc Lean, IL` and `Ft Worth, TX`;
   - one city that exists in no gazetteer (`Nowhereville, KS`).
-- [ ] T003 [P] Create `tests/fixtures/sample_fuel_bad.csv`. Use the same header, with two malformed rows: line 3 has `Retail Price` `-3.1`; line 5 has an empty `City`. All other rows are valid.
-- [ ] T004 [P] Create `tests/fixtures/sample_geonames.txt`, about 10 tab-separated lines in the real 19-column `US.txt` format. Columns used: 0 geonameid, 1 name, 2 asciiname, 3 alternatenames, 4 lat, 5 lng, 6 feature class, 7 feature code, 10 admin1, 14 population. Include:
+- [X] T003 [P] Create `tests/fixtures/sample_fuel_bad.csv`. Use the same header, with two malformed rows: line 3 has `Retail Price` `-3.1`; line 5 has an empty `City`. All other rows are valid.
+- [X] T004 [P] Create `tests/fixtures/sample_geonames.txt`, about 10 tab-separated lines in the real 19-column `US.txt` format. Columns used: 0 geonameid, 1 name, 2 asciiname, 3 alternatenames, 4 lat, 5 lng, 6 feature class, 7 feature code, 10 admin1, 14 population. Include:
   - `Saint Louis, MO` (class P, population > 0);
   - `McLean, IL`;
   - `Fort Worth, TX`;
@@ -47,7 +47,7 @@ hand-made fixture. The real shipped fixture is produced by US2's real run (T031)
   - one place matched only through its `alternatenames` column;
   - one class `P` place with population 0;
   - one non-`P` (e.g. class `H`) line.
-- [ ] T005 [P] Add shared pytest fixtures in `tests/conftest.py`: `fixtures_dir` (path to `tests/fixtures/`) and `out_dirs(tmp_path)`. `out_dirs` returns temp paths for the station fixture, the unmatched CSV and the place lookup, so integration tests never touch committed files.
+- [X] T005 [P] Add shared pytest fixtures in `tests/conftest.py`: `fixtures_dir` (path to `tests/fixtures/`) and `out_dirs(tmp_path)`. `out_dirs` returns temp paths for the station fixture, the unmatched CSV and the place lookup, so integration tests never touch committed files.
 
 ---
 
@@ -57,12 +57,12 @@ hand-made fixture. The real shipped fixture is produced by US2's real run (T031)
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T006 Write the failing test `tests/integration/test_models.py` (pytest-django, `@pytest.mark.django_db`). It covers:
+- [X] T006 Write the failing test `tests/integration/test_models.py` (pytest-django, `@pytest.mark.django_db`). It covers:
   - saving a `FuelStation` and a `FuelPrice` with price `Decimal("3.00733333")` reads back `== Decimal("3.00733333")`;
   - `FuelStation.pk == opis_id`;
   - an explicitly set `FuelPrice.id` is kept;
   - deleting a station cascades to its prices.
-- [ ] T007 Implement the models in `stations/models.py`, exactly as in data-model.md:
+- [X] T007 Implement the models in the `stations/models/` package (`fuel_station.py`, `fuel_price.py`, re-exported from `__init__.py`), exactly as in data-model.md:
   - **`FuelStation`:**
     - `opis_id = IntegerField(primary_key=True)`
     - `name = CharField(max_length=120)`
@@ -79,8 +79,8 @@ hand-made fixture. The real shipped fixture is produced by US2's real run (T031)
     - `raw_name = CharField(max_length=120)`
     - `price = DecimalField(max_digits=12, decimal_places=8)`
   - **No `Meta.ordering`** on either model (research R5).
-- [ ] T008 Generate `stations/migrations/0001_initial.py` with `python manage.py makemigrations stations`. Confirm T006 passes.
-- [ ] T009 [P] Register both models read-only in `stations/admin.py`: `list_display` (`opis_id`, `name`, `city`, `state`, `best_price`, `geo_source`), and search on name and city.
+- [X] T008 Generate `stations/migrations/0001_initial.py` with `python manage.py makemigrations stations`. Confirm T006 passes.
+- [X] T009 [P] Register both models read-only in `stations/admin.py`: `list_display` (`opis_id`, `name`, `city`, `state`, `best_price`, `geo_source`), and search on name and city.
 
 **Checkpoint**: the schema exists, and the exact-decimal round trip passes on SQLite.
 

@@ -183,7 +183,7 @@ FIRST USE: stations + KD-tree loaded into memory once (lazy, lru_cache)
 
 | Module | Responsibility | Django? |
 | --- | --- | --- |
-| `stations/models.py` | `FuelStation`, `FuelPrice` | Yes |
+| `stations/models/` | `FuelStation` (`fuel_station.py`), `FuelPrice` (`fuel_price.py`); one module per model | Yes |
 | `stations/pipeline/clean.py` | CSV parsing, stripping, Canada filter, `Decimal` prices, grouping | No |
 | `stations/pipeline/geonames.py` | GeoNames streaming, `normalise_place_name()`, lookup, places index export | No |
 | `stations/pipeline/osm.py`, `matching.py` | Overpass fetch with disk cache; name cleaning and fuzzy matching (Feature 005) | No |

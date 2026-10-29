@@ -87,7 +87,10 @@ specs/001-station-data-pipeline/
 
 ```text
 stations/
-├── models.py                       # FuelStation, FuelPrice
+├── models/                         # one module per model
+│   ├── __init__.py                 # exports FuelStation, FuelPrice
+│   ├── fuel_station.py
+│   └── fuel_price.py
 ├── migrations/0001_initial.py
 ├── pipeline/                       # pure, no Django imports
 │   ├── __init__.py

@@ -25,3 +25,10 @@ htmlcov/
 .specify/integrations/
 .specify/workflows/
 .claude/
+
+# Editor and temp files
+*.tmp
+*.swp
+.vscode/
+.idea/
+Thumbs.db

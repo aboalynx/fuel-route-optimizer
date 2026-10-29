@@ -1,0 +1,11 @@
+4407066	Saint Louis	Saint Louis	St. Louis,St Louis,Saint-Louis	38.62727	-90.19789	P	PPLA2	US		MO				301578		100	America/Chicago	2024-01-01
+4393217	Kansas City	Kansas City	KC	39.09973	-94.57857	P	PPL	US		MO				508090		100	America/Chicago	2024-01-01
+4247000	McLean	McLean	Mc Lean	40.31476	-89.17175	P	PPL	US		IL				760		100	America/Chicago	2024-01-01
+4691930	Fort Worth	Fort Worth	Ft. Worth,Ft Worth	32.72541	-97.32085	P	PPLA2	US		TX				918915		100	America/Chicago	2024-01-01
+4250542	Springfield	Springfield	Springfield Illinois	39.80172	-89.64371	P	PPLA	US		IL				114394		100	America/Chicago	2024-01-01
+4250600	Springfield	Springfield		41.10000	-88.20000	P	PPL	US		IL				500		100	America/Chicago	2024-01-01
+4250999	Springfield	Springfield		38.50000	-90.00000	P	PPL	US		IL				114394		100	America/Chicago	2024-01-01
+4273000	Hometown	Hometown		38.90000	-97.10000	P	PPLH	US		KS				0		100	America/Chicago	2024-01-01
+4273100	New Hometown	New Hometown	Hometown,Old Hometown	38.95000	-97.15000	P	PPL	US		KS				1200		100	America/Chicago	2024-01-01
+4740000	Tinyville	Tinyville		31.50000	-98.50000	P	PPL	US		TX				0		100	America/Chicago	2024-01-01
+4400000	Lake Example	Lake Example		38.70000	-90.30000	H	LK	US		MO				0		100	America/Chicago	2024-01-01
