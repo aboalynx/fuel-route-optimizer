@@ -116,13 +116,13 @@ description: "Task list for Feature 004: Route Plan API"
 
 ### Tests for User Story 2 ⚠️
 
-- [ ] T017 [P] [US2] Write `tests/unit/routing/test_cached.py` (pure, a dict-backed fake cache with `get`/`set(key, value, timeout)` and a fake provider counting calls): miss → 1 call, `(route, False)`, value stored with `timeout == ttl_seconds`; hit → 0 calls, `(route, True)`; a provider raising `RoutingUnavailable` → re-raised, nothing stored, next call tries again; `cache_key` equal for `32.780049999` vs `32.78004` (both round to `32.7800`) and different for `32.78005001`; `-0.00001` and `0.0` share a key; key contains the provider name; no Django import (AST).
-- [ ] T018 [P] [US2] Write `tests/integration/api/test_cache.py`: two identical requests → second has `routing_calls == 0`, `cached is True`, `osrm.call_count == 1`, identical `summary`/`fuel_stops`; same start/finish with a different `start_fuel_gallons`, `corridor_miles`, `reserve_gallons` or `min_saving_per_stop_usd` → 0 calls and a plan for the new values; coordinates differing beyond the 4th decimal share the route; a first request answered 503 (respx timeout) followed by the same request with OSRM back → `routing_calls == 1` (failure not cached).
+- [X] T017 [P] [US2] Write `tests/unit/routing/test_cached.py` (pure, a dict-backed fake cache with `get`/`set(key, value, timeout)` and a fake provider counting calls): miss → 1 call, `(route, False)`, value stored with `timeout == ttl_seconds`; hit → 0 calls, `(route, True)`; a provider raising `RoutingUnavailable` → re-raised, nothing stored, next call tries again; `cache_key` equal for `32.780049999` vs `32.78004` (both round to `32.7800`) and different for `32.78005001`; `-0.00001` and `0.0` share a key; key contains the provider name; no Django import (AST).
+- [X] T018 [P] [US2] Write `tests/integration/api/test_cache.py`: two identical requests → second has `routing_calls == 0`, `cached is True`, `osrm.call_count == 1`, identical `summary`/`fuel_stops`; same start/finish with a different `start_fuel_gallons`, `corridor_miles`, `reserve_gallons` or `min_saving_per_stop_usd` → 0 calls and a plan for the new values; coordinates differing beyond the 4th decimal share the route; a first request answered 503 (respx timeout) followed by the same request with OSRM back → `routing_calls == 1` (failure not cached).
 
 ### Implementation for User Story 2
 
-- [ ] T019 [US2] Implement `routing/cached.py` (`CachedRoutingProvider`, `cache_key`) per research R3. Run T017 green.
-- [ ] T020 [US2] In `api/services/route_plan.py`, wrap the provider: `CachedRoutingProvider(provider_from_settings(), django.core.cache.cache, settings.ROUTE_CACHE_TTL_SECONDS)`; set `routing_calls = 0 if cached else 1` and `cached`. Run T018 and all US1 tests green.
+- [X] T019 [US2] Implement `routing/cached.py` (`CachedRoutingProvider`, `cache_key`) per research R3. Run T017 green.
+- [X] T020 [US2] In `api/services/route_plan.py`, wrap the provider: `CachedRoutingProvider(provider_from_settings(), django.core.cache.cache, settings.ROUTE_CACHE_TTL_SECONDS)`; set `routing_calls = 0 if cached else 1` and `cached`. Run T018 and all US1 tests green.
 
 **Checkpoint**: US1 + US2 are the shippable core.
 

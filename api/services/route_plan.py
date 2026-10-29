@@ -10,6 +10,7 @@ from decimal import Decimal
 
 import numpy as np
 from django.conf import settings
+from django.core.cache import cache
 
 from api.services.places import get_place_index
 from planner.corridor import Candidate, find_candidates
@@ -24,6 +25,7 @@ from planner.locations import (
 from planner.optimizer import FuelPurchase, PlanStation, plan_refuelling
 from planner.station_index import StationIndex, StationInfo
 from routing.base import LatLng, Route
+from routing.cached import CachedRoutingProvider
 from routing.factory import provider_from_settings
 from stations.services.index_loader import get_station_index
 
@@ -102,9 +104,11 @@ def plan_route(inp: RoutePlanInput, *, provider=None) -> RoutePlanResult:
     start_fuel = _check_vehicle_inputs(inp, vehicle)
     timer.lap("resolve")
 
-    provider = provider or provider_from_settings()
-    route = provider.route(LatLng(start.lat, start.lng), LatLng(finish.lat, finish.lng))
-    routing_calls, cached = 1, False
+    routes = CachedRoutingProvider(
+        provider or provider_from_settings(), cache, settings.ROUTE_CACHE_TTL_SECONDS
+    )
+    route, cached = routes.route(LatLng(start.lat, start.lng), LatLng(finish.lat, finish.lng))
+    routing_calls = 0 if cached else 1
     timer.lap("routing")
 
     index = get_station_index()

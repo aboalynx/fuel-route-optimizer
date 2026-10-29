@@ -2,6 +2,7 @@
 
 import logging
 
+from django.conf import settings
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -10,6 +11,7 @@ from api.exceptions import error_response
 from api.presenters import present
 from api.serializers import RoutePlanRequestSerializer
 from api.services.route_plan import InvalidPlanInput, RoutePlanInput, plan_route
+from routing.base import RoutingUnavailable
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +34,17 @@ def error_for(error: Exception) -> Response:
             ErrorCode.INVALID_INPUT,
             error.message,
             {"field": error.field, "fields": {error.field: [error.message]}},
+        )
+    if isinstance(error, RoutingUnavailable):
+        retry = error.retry_after_seconds
+        if retry is None:
+            retry = settings.ROUTING_RETRY_AFTER_SECONDS
+        return error_response(
+            ErrorCode.ROUTING_UNAVAILABLE,
+            f"routing unavailable: {error.reason}",
+            {"reason": error.reason.value},
+            status=503,
+            headers={"Retry-After": str(retry)},
         )
     logger.exception("route plan failed")
     return error_response(ErrorCode.INTERNAL_ERROR, "internal error", status=500)
