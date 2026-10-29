@@ -587,7 +587,7 @@ planner/geometry.py (pure numpy): haversine_miles, densify (keep every point, in
 to_unit_vectors, chord_for_miles, local equirectangular segment projection.
 planner/corridor.py: find_candidates(route_points, distance_miles, index, corridor_miles) ->
 list[Candidate(opis_id, mile_marker, off_route_miles, price: Decimal)]; radius 1-25 (default
-settings.CORRIDOR_MILES); gather with query_ball_point(chord(r + s/2)), then measure each candidate
+settings.CORRIDOR_MILES); gather with one route-tree nearest query of every station bounded at chord(r + s/2), then measure each candidate
 exactly against the segments adjacent to its nearby samples (exact off-route distance and mile
 marker rescaled to the provider distance); include iff off <= r; sort by (mile_marker, opis_id).
 stations/services/index_loader.py: lru_cache'd get_station_index() built lazily on first use
@@ -623,7 +623,7 @@ tests/fixtures/osrm_dallas_chicago.json; synthetic routes for geometry.
   - empty data → `StationDataMissing` with the `loaddata` hint (never an empty list).
 - **Timing:** a smoke test, not strict in CI.
 
-**Done when:** a mocked call returns a `Route`, candidates are exact on synthetic routes (0.05 mile, on-route = 0, the 9.99/10.01 boundary), one manual OSRM call (Dallas → Chicago) works, and the timing for a long route is noted for the README.
+**Done when:** ✅ (2026-10-29: 966.5 mi real call; 27 ms Dallas → Chicago, 54 ms for 3,423 mi) a mocked call returns a `Route`, candidates are exact on synthetic routes (0.05 mile, on-route = 0, the 9.99/10.01 boundary), one manual OSRM call (Dallas → Chicago) works, and the timing for a long route is noted for the README.
 
 ---
 

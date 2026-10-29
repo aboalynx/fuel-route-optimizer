@@ -43,7 +43,7 @@ real call to the public OSRM server on 2026-10-29 (Dallas 32.78,-96.80 → Chica
 
 - **Decision:** as in [docs/algorithms/route-corridor-search.md](../../docs/algorithms/route-corridor-search.md) and the amended [ADR-0002](../../docs/adr/0002-kdtree-corridor-search.md).
   1. **densify** the route: keep every original point and insert linearly interpolated points so no segment is longer than `s = min(1 mi, r/2)`. Densified segments are sub-segments of the original polyline, so there is no corner-cutting on curves. Replacing the polyline with evenly spaced samples would cut corners: on a 1-mile-radius curve a 1-mile chord sits about 0.125 mi from the road, which breaks the 0.05-mile accuracy.
-  2. Gather candidates with a `cKDTree` ball query on the densified points as 3D unit vectors (radius `r + s/2`).
+  2. Gather candidates with one vectorized nearest-neighbour query of every station against a `cKDTree` of the densified points (3D unit vectors), bounded at `r + s/2`. This updates the first implementation, where a ball query from each route point took 66 ms on 27k points: querying from the 6,620 stations gives the same set in a few ms.
   3. Measure each candidate exactly by projecting it onto the densified segments adjacent to its nearest densified point, using a local equirectangular projection.
   4. Include a station if and only if its off-route distance ≤ `r`.
   5. Rescale mile markers to the provider distance. Log a **warning** (not an error) when provider distance ÷ geometry length is outside 0.95–1.05; on real data that suggests a broken geometry.

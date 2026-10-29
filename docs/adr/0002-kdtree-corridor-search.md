@@ -19,7 +19,7 @@ Each request must find which of ~6,600 stations lie within `CORRIDOR_MILES` of a
 - Embed station coordinates as 3D unit vectors in a `scipy.spatial.cKDTree`, built lazily once.
 - Per request:
   1. Densify the route: keep every original point and insert interpolated points so no segment is longer than `s = min(1 mi, r/2)`. There is no corner-cutting on curves.
-  2. **Gather** candidates with the chord length for `r + s/2`, so no station within `r` is missed.
+  2. **Gather** candidates with one vectorized nearest-neighbour query of all stations against a KD-tree of the densified route, bounded at the chord length for `r + s/2`. No station within `r` is missed, and this is much faster than a ball query from ~10 route points per mile (measured 27 ms Dallas → Chicago, 54 ms for 3,423 miles).
   3. **Measure** each candidate exactly. Project it onto the densified segments adjacent to its nearest point, in a local equirectangular frame. That gives the exact off-route distance and the mile marker, rescaled to the provider distance.
   4. Include a station **if and only if** its exact off-route distance ≤ `r`.
   5. Sort by `(mile_marker, opis_id)`.

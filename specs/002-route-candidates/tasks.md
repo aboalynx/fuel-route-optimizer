@@ -188,23 +188,23 @@ description: "Task list for Feature 002: Route Candidates"
 
 ## Phase 5: Polish & Cross-Cutting Concerns
 
-- [ ] T019 Run quickstart §2, one real routing call (Dallas → Chicago). Expect about 966 mi and several thousand points. Note the result for the README.
-- [ ] T020 Run quickstart §3–§4:
+- [X] T019 Run quickstart §2, one real routing call (Dallas → Chicago). Expect about 966 mi and several thousand points. Note the result for the README.
+- [X] T020 Run quickstart §3–§4:
   - candidates on the real route with the real index (a few hundred, rising mile markers, `Decimal` prices);
   - time `find_candidates` on a synthetic 3,000-mile route against the real index (target well under 100 ms).
 
   Note the figures and the machine.
-- [ ] T021 [P] Update `README.md`:
+- [X] T021 [P] Update `README.md`:
   - the status (002 done);
   - the real-call result (distance, points, time);
   - the measured `find_candidates` timing and machine (SC-004);
   - in "How it works", one sentence that routing failures are never retried, and that the list of reasons is in the 002 contract.
-- [ ] T022 [P] Sync `docs/implementation-plan.md` Feature 002 if anything changed during implementation (module names, test list), and tick its "Done when".
-- [ ] T023 Quality gate:
+- [X] T022 [P] Sync `docs/implementation-plan.md` Feature 002 if anything changed during implementation (module names, test list), and tick its "Done when".
+- [X] T023 Quality gate:
   - `python -m pytest --cov=planner --cov=routing --cov=stations --cov-report=term-missing` → ≥ 90% on `planner/` and `routing/`;
   - `ruff check .` and `ruff format --check .` (this also formats Python blocks inside Markdown);
   - `python manage.py check`.
-- [ ] T024 Run the full quickstart.md validation (§1–§4) and confirm no test made a network call (respx asserts all requests are mocked).
+- [X] T024 Run the full quickstart.md validation (§1–§4) and confirm no test made a network call (respx asserts all requests are mocked).
 
 ---
 

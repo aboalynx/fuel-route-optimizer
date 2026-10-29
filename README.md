@@ -18,7 +18,7 @@ The vehicle has a 500-mile range and does 10 miles per gallon.
 
 - [x] Project setup and CI (done)
 - [x] 001 station-data-pipeline: clean CSV, geocode stations offline, committed fixture (done)
-- [ ] 002 route-candidates: one routing call + KD-tree corridor search (planned)
+- [x] 002 route-candidates: one routing call + KD-tree corridor search (done)
 - [ ] 003 refuel-optimizer: optimal greedy refuelling plan (planned)
 - [ ] 004 route-plan-api: `POST /api/v1/route-plan/` + Leaflet map page (planned)
 - [ ] 005 osm-precision-layer: exact station coordinates from OpenStreetMap (planned, stretch)
@@ -53,6 +53,21 @@ needs an in-memory spatial index (a KD-tree) to find the stations along a route 
 process therefore holds its own copy, built once on first use, and a search never queries the
 database. Redis was considered and rejected for this: every request would pay a network round-trip
 plus deserialization, and it adds infrastructure a reviewer would have to run.
+
+**Routing and corridor search.** Each route is one call to the routing service, and a failed call
+is never retried, because a retry would be a second external call. Every failure (timeout, network
+error, server error, rate limit, invalid response, no route, start/finish not near a road) becomes
+one "routing unavailable" error with a reason. The full list is in
+[specs/002-route-candidates/contracts/route_candidates.md](specs/002-route-candidates/contracts/route_candidates.md).
+Stations near the route are measured exactly against the road geometry: to within 0.05 mile, and a
+station on the road reads 0.
+
+**Measured on a 2018 MacBook Pro (Intel i7-8750H, Python 3.15.2):**
+
+- Dallas, TX → Chicago, IL routing call: 966.5 miles, 9,149 route points, 0.5–0.8 s.
+- Corridor search (10-mile radius) on that route: 202 candidate stations in 27 ms.
+- Corridor search on a synthetic 3,423-mile route (34,725 points): 327 candidates in 54 ms.
+- Station index: built once per process on first use, in about 0.1 s.
 
 ## Tech stack
 

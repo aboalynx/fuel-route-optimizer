@@ -22,19 +22,20 @@ Requirements:
 ```text
 first use (lazy, lru_cache'd get_station_index() in stations/services/index_loader.py; never in AppConfig.ready()):
     index = arrays of opis_id, lat, lng, best_price (Decimal), name, address, city, state, geo_source
-    station_tree = cKDTree(unit_vectors(lat, lng))
+    station_vectors = unit_vectors(lat, lng)
     empty index (or missing tables) -> raise StationDataMissing
 
 per request:
     s      = min(1 mi, r/2)
     dense  = densify(polyline, s)                        # keep every point, insert so no segment > s
     cum    = cumulative haversine miles of dense;  k = D / cum[-1]
-    # 1. gather: no station within r can be missed
-    hits   = station_tree.query_ball_point(unit_vectors(dense), chord(r + s/2))
     route_tree = cKDTree(unit_vectors(dense))
-    # 2. measure each candidate exactly against the route itself
-    for station in hits:
-        i0     = its nearest dense point (ties -> lowest index)
+    # 1. gather: one vectorized query of every station against the route tree, bounded at r + s/2,
+    #    so no station within r can be missed (it also returns each station's nearest point)
+    d, nearest = route_tree.query(station_vectors, distance_upper_bound=chord(r + s/2))
+    # 2. measure each candidate (d finite) exactly against the route itself
+    for station in candidates:
+        i0     = its nearest dense point(s) (all of them on exact ties)
         for each segment touching i0 ((i0-1, i0) and (i0, i0+1)):
             project the station onto the segment in a local equirectangular frame
             off  = distance from the station to the projected point
@@ -64,6 +65,12 @@ The station is the origin. Its projection onto segment A→B is
 
 - **3D unit vectors for the gather.** A radius in degrees is wrong: a degree of longitude is ~59 mi
   in Texas and ~47 mi in Montana.
+- **Querying from the stations, not from the route.** A route has about 10 points per mile, so a
+  3,000-mile route has ~30,000 points; a ball query from each of them took 66 ms. One vectorized
+  nearest-neighbour query of the ~6,600 stations against a tree of the route gives the same set of
+  candidates (a station is within `r + s/2` of some route point iff its nearest route point is),
+  plus the nearest point that step 2 needs. Measured: 27 ms on the real Dallas → Chicago route,
+  54 ms on a synthetic 3,423-mile route (2018 MacBook Pro).
 - **Densifying, not resampling.** Interstate vertices can be 20+ miles apart, so points are inserted. Every original point is kept, so the densified segments are sub-segments of the real polyline. Replacing the polyline with evenly spaced samples would cut corners: on a 1-mile-radius curve, a 1-mile chord is about 0.125 mi from the road.
 - **Rescale check.** Mile markers are rescaled to the provider distance. If provider distance ÷ geometry length is outside 0.95–1.05, a warning is logged.
 - **Gathering with `r + s/2`.** No station within `r` is missed.
