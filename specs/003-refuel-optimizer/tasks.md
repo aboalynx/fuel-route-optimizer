@@ -26,7 +26,7 @@ description: "Task list for Feature 003: Refuel Optimizer"
 
 ## Phase 1: Setup
 
-- [ ] T001 Write the test oracle `tests/unit/planner/oracle.py` (research R6) and its own sanity tests in `tests/unit/planner/test_oracle.py`:
+- [X] T001 Write the test oracle `tests/unit/planner/oracle.py` (research R6) and its own sanity tests in `tests/unit/planner/test_oracle.py`:
   - `oracle_cost(distance: int, stations: list[tuple[int, int, int]], capacity: int, start_fuel: int) -> int | None` where each station is `(opis_id, mile, price)`, `mpg = 1` (one unit = one gallon = one mile). It returns the minimum total cost, or `None` when no plan exists;
   - a DP over (node index, whole fuel units on arrival), buying whole units only at stations, never above `capacity`, never below 0;
   - `random_instance(rng: random.Random) -> (distance, stations, capacity, start_fuel)` with range 5–15, 0–8 stations, distance ≤ 40, integer prices 1–9, start fuel `0..capacity`, unique station IDs `1..n`, stations sorted by `(mile, opis_id)`, and `0 ≤ mile ≤ distance`;
@@ -38,14 +38,14 @@ description: "Task list for Feature 003: Refuel Optimizer"
 
 **Purpose**: the value types, the rounding helper and input validation (data-model.md, research R3–R5), used by all three stories.
 
-- [ ] T002 Write the failing test `tests/unit/planner/test_optimizer_types.py` (pure), covering:
+- [X] T002 Write the failing test `tests/unit/planner/test_optimizer_types.py` (pure), covering:
   - `PlanStation`, `FuelPurchase`, `FuelPlan` are frozen dataclasses with exactly the fields in data-model.md;
   - `InfeasibleReason` values are exactly `STATION_GAP = "station gap"` and `START_FUEL_INSUFFICIENT = "start fuel insufficient"`;
   - `round_cents`: `Decimal("1.005") → Decimal("1.01")`, `Decimal("1.004999") → Decimal("1.00")`, `Decimal("2.675") → Decimal("2.68")` (half up, not banker's), result exponent is `-2`;
   - **validation** of `plan_refuelling` (each case → `ValueError` with a message naming the field): `distance_miles < 0`; `mpg <= 0`; `max_range_miles <= 0`; `start_fuel_gallons < 0` or `> capacity` (`capacity = max_range_miles / mpg`); a station with `mile_marker < 0` or `> distance_miles`; a station with `price_usd_per_gallon <= 0`; stations not sorted by `(mile_marker, opis_id)`;
   - a `float` for `distance_miles`, `mpg`, `max_range_miles`, `start_fuel_gallons`, a station's `mile_marker` or its price → `TypeError`;
   - `planner/optimizer.py` imports nothing outside the standard library and no Django (AST check, like `tests/unit/stations/test_enums.py`).
-- [ ] T003 Implement in `planner/optimizer.py`: `PlanStation(opis_id: int, mile_marker: Decimal, price_usd_per_gallon: Decimal)`, `FuelPurchase(opis_id, mile_marker, price_usd_per_gallon, gallons, cost_usd)`, `FuelPlan(purchases: tuple[FuelPurchase, ...], gallons_consumed, gallons_purchased, total_cost_usd, fuel_left_gallons)`, `InfeasibleReason` (`StrEnum`), `InfeasibleRoute(Exception)` with the fields in data-model.md, `round_cents(amount_usd) = amount_usd.quantize(Decimal("0.01"), ROUND_HALF_UP)`, and the `plan_refuelling(distance_miles, stations, *, mpg, max_range_miles, start_fuel_gallons=None, reserve_gallons=Decimal(0))` signature with the validation only (the body after validation may raise `NotImplementedError` for now). `None` start fuel means a full tank. Run T002 green.
+- [X] T003 Implement in `planner/optimizer.py`: `PlanStation(opis_id: int, mile_marker: Decimal, price_usd_per_gallon: Decimal)`, `FuelPurchase(opis_id, mile_marker, price_usd_per_gallon, gallons, cost_usd)`, `FuelPlan(purchases: tuple[FuelPurchase, ...], gallons_consumed, gallons_purchased, total_cost_usd, fuel_left_gallons)`, `InfeasibleReason` (`StrEnum`), `InfeasibleRoute(Exception)` with the fields in data-model.md, `round_cents(amount_usd) = amount_usd.quantize(Decimal("0.01"), ROUND_HALF_UP)`, and the `plan_refuelling(distance_miles, stations, *, mpg, max_range_miles, start_fuel_gallons=None, reserve_gallons=Decimal(0))` signature with the validation only (the body after validation may raise `NotImplementedError` for now). `None` start fuel means a full tank. Run T002 green.
 
 **Checkpoint**: types and validation exist; the stories can start.
 
@@ -59,7 +59,7 @@ description: "Task list for Feature 003: Refuel Optimizer"
 
 ### Tests for User Story 1 ⚠️ (write first, show failing)
 
-- [ ] T004 [P] [US1] Write `tests/unit/planner/test_optimizer.py` (pure). Use `mpg=Decimal(10)`, `max_range_miles=Decimal(500)` unless stated. Cases:
+- [X] T004 [P] [US1] Write `tests/unit/planner/test_optimizer.py` (pure). Use `mpg=Decimal(10)`, `max_range_miles=Decimal(500)` unless stated. Cases:
   - **No stops:** 400 mi, full tank → `purchases == ()`, `total_cost_usd == Decimal("0.00")`, `fuel_left_gallons == 10`; exactly 500 mi → no stops, 0 left; 0 mi → no stops.
   - **Pass a pricier station:** stations `(1, 300, 3.50)`, `(2, 450, 3.00)`, 900 mi (quickstart §2) → one purchase at station 2, `gallons == 40`, `cost_usd == Decimal("120.00")`, `fuel_left_gallons == 0`.
   - **Buy only enough to reach a cheaper station:** at a station with a strictly cheaper one in range, the purchase equals exactly the shortfall to reach it (hand-worked numbers in the test).
@@ -72,11 +72,11 @@ description: "Task list for Feature 003: Refuel Optimizer"
   - **Default start fuel:** omitting `start_fuel_gallons` gives a plan equal to passing `Decimal(50)`.
   - **Station at the finish mile:** a cheap station exactly at mile D gets no purchase, and the truck arrives with 0 gal.
   - **Determinism:** two calls with the same input return equal `FuelPlan`s.
-- [ ] T005 [P] [US1] Write `tests/unit/planner/test_oracle_agreement.py` (pure): for seeds `0..49`, build `random_instance(random.Random(seed))`; when `oracle_cost` is not `None`, call `plan_refuelling` with `mpg=Decimal(1)`, `max_range_miles=Decimal(capacity)`, `start_fuel_gallons=Decimal(start_fuel)` and integer `Decimal` miles and prices, and assert `plan.total_cost_usd == Decimal(oracle_cost)`. Parametrize by seed so a failure names it.
+- [X] T005 [P] [US1] Write `tests/unit/planner/test_oracle_agreement.py` (pure): for seeds `0..49`, build `random_instance(random.Random(seed))`; when `oracle_cost` is not `None`, call `plan_refuelling` with `mpg=Decimal(1)`, `max_range_miles=Decimal(capacity)`, `start_fuel_gallons=Decimal(start_fuel)` and integer `Decimal` miles and prices, and assert `plan.total_cost_usd == Decimal(oracle_cost)`. Parametrize by seed so a failure names it.
 
 ### Implementation for User Story 1
 
-- [ ] T006 [US1] Implement the greedy in `plan_refuelling` (`planner/optimizer.py`), per research R1–R3 and `docs/algorithms/refuelling-greedy.md`:
+- [X] T006 [US1] Implement the greedy in `plan_refuelling` (`planner/optimizer.py`), per research R1–R3 and `docs/algorithms/refuelling-greedy.md`:
   - nodes = origin `(mile 0, price +∞)`, the stations in order, destination `(mile D, price 0)`;
   - fuel held in **miles of range** (R2): capacity `max_range_miles`, start `start_fuel_gallons × mpg`;
   - from node `i`, window = nodes `j > i` with `mile[j] − mile[i] ≤ capacity`; scan stops at the first strictly cheaper node (R8);
