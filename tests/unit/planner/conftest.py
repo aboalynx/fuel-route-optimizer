@@ -53,7 +53,6 @@ def arc_route(
 def make_index():
     """Build a StationIndex from (opis_id, lat, lng, price) tuples."""
     from planner.station_index import build_station_index
-
     from stations.enums import GeoSource
 
     def _make(stations):
