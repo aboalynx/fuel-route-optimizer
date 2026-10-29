@@ -51,9 +51,10 @@ short):
 **Rules:**
 
 - Ties: an equal price is not "cheaper"; among equally cheap stations, the farthest wins, then the lowest `opis_id`.
-- Money: miles are quantized to `Decimal` 0.001 before the call, and every value inside is `Decimal`. Prices arrive unrounded (up to 8 dp).
-- Rounding: only at the API boundary, ROUND_HALF_UP. The total is the sum of the rounded stop costs.
-- Complexity: `O(n·w)` with `w` = stations within 500 mi, under 1 ms in practice.
+- Money: miles are quantized to `Decimal` 0.001 before the call, and every value inside is `Decimal`. Prices arrive unrounded (up to 8 dp). Inside the loop, fuel is held in miles of range (`gallons × mpg`), so every sum is exact for any mpg; gallons are computed only for the reported values.
+- Rounding: happens once, when the plan is built (the money output), ROUND_HALF_UP to cents per stop. The total is the sum of the rounded stop costs. The API only formats.
+- Infeasible details: `InfeasibleRoute` carries the reason (`station gap` or `start fuel insufficient`), the gap start and end miles and the usable range; for start fuel it also carries the start fuel and the gallons short.
+- Complexity: `O(n·w)` with `w` = stations within 500 mi. Measured: 0.8 ms on the 202 real Dallas → Chicago candidates, 1.2 ms on 400 stations over 3,000 miles (2018 MacBook Pro).
 
 ## Rejected alternatives
 

@@ -39,7 +39,7 @@ stations, the farthest wins, then the lowest `opis_id`.
 
 ## Consequences
 
-- Provably optimal for the model, `O(n·w)`, under 1 ms. Pure and easy to test.
+- Provably optimal for the model, `O(n·w)`, about 1 ms (measured 0.8 ms on 202 real candidates, 1.2 ms on 400). Pure and easy to test.
 - Infeasibility maps cleanly to a real gap (HTTP 422).
 - Ignores detour fuel, stop count and minimum purchase. Adding those would need the DP or a graph formulation.
 - Correctness at the finish depends on the destination sentinel. A regression test guards it.

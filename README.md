@@ -19,7 +19,7 @@ The vehicle has a 500-mile range and does 10 miles per gallon.
 - [x] Project setup and CI (done)
 - [x] 001 station-data-pipeline: clean CSV, geocode stations offline, committed fixture (done)
 - [x] 002 route-candidates: one routing call + KD-tree corridor search (done)
-- [ ] 003 refuel-optimizer: optimal greedy refuelling plan (planned)
+- [x] 003 refuel-optimizer: optimal greedy refuelling plan (done)
 - [ ] 004 route-plan-api: `POST /api/v1/route-plan/` + Leaflet map page (planned)
 - [ ] 005 osm-precision-layer: exact station coordinates from OpenStreetMap (planned, stretch)
 
@@ -62,12 +62,23 @@ one "routing unavailable" error with a reason. The full list is in
 Stations near the route are measured exactly against the road geometry: to within 0.05 mile, and a
 station on the road reads 0.
 
+**Cheapest refuelling plan.** At each fuel point the truck buys just enough to reach the next
+strictly cheaper station in range; if none is in range, it fills the tank and goes to the cheapest
+one in range. The finish counts as a free station, so the truck never buys fuel it does not need to
+finish. This greedy is provably optimal for the model, and the tests check it against a
+brute-force optimum on 50 seeded random trips. Details:
+[docs/algorithms/refuelling-greedy.md](docs/algorithms/refuelling-greedy.md). An impossible trip
+returns the reason and the exact gap (for example "station gap: no fuel point between mile 100 and
+mile 700"), never a partial plan.
+
 **Measured on a 2018 MacBook Pro (Intel i7-8750H, Python 3.15.2):**
 
 - Dallas, TX → Chicago, IL routing call: 966.5 miles, 9,149 route points, 0.5–0.8 s.
 - Corridor search (10-mile radius) on that route: 202 candidate stations in 27 ms.
 - Corridor search on a synthetic 3,423-mile route (34,725 points): 327 candidates in 54 ms.
 - Station index: built once per process on first use, in about 0.1 s.
+- Refuelling plan on the 202 Dallas → Chicago candidates: 4 stops, $134.64, in 0.8 ms.
+- Refuelling plan on a synthetic 3,000-mile route with 400 stations: 1.2 ms.
 
 ## Tech stack
 
@@ -180,7 +191,9 @@ wrong match, because a wrong location is worse than a missing one.
 8. Any fractional amount of fuel can be bought. There is no minimum purchase.
 9. The routing profile is a car profile (OSRM demo). Truck restrictions are not modelled.
 10. The "inside the USA" check for coordinates uses the nearest US populated place within 25 miles. Points just across the border (e.g. Windsor, Ontario, next to Detroit) can therefore be accepted.
-11. There is no safety reserve by default (`reserve_gallons = 0`).
+11. There is no safety reserve by default (`reserve_gallons = 0`), so the range is the brief's 500 miles. A reserve of 0–25 gallons can be requested; the tank then never drops below it (with 5 gallons, no leg is longer than 450 miles). In production a default of about 5 gallons would be sensible.
+12. Money is exact: prices are never rounded before multiplying. Each stop's cost is rounded half up to cents, and the total cost is the sum of the rounded stop costs, so the stops always add up to the total shown.
+13. A purely cost-optimal plan can include two stops close together for a small saving (see future work).
 
 ## API (planned, feature 004)
 
@@ -223,7 +236,7 @@ Response shape. The numbers are illustrative, not measured:
 | 400 | `location_not_found` | Unknown `"City, ST"`, or the state is not a 2-letter code |
 | 400 | `location_outside_us` | Coordinates or state not in the USA |
 | 400 | `same_location` | Start and finish resolve to the same point |
-| 422 | `infeasible_route` | A stretch longer than the vehicle range with no reachable station |
+| 422 | `infeasible_route` | A stretch longer than the vehicle range with no reachable station, or the start fuel cannot reach the first fuel point (the body gives the reason, the gap miles and the gallons short) |
 | 503 | `routing_unavailable` | Routing provider down or timed out |
 
 Response timings for cold and cached routes are TBD after feature 004.

@@ -687,7 +687,7 @@ Origin = node with price +inf, destination = node with price 0. Greedy "next str
 within range, else fill up and go to the cheapest in range" per docs/algorithms/refuelling-greedy.md;
 decision docs/adr/0001. Output FuelPlan(purchases, gallons_consumed, gallons_purchased,
 total_cost_usd, fuel_left_gallons) or raise InfeasibleRoute(reason, gap_start_mile, gap_end_mile).
-Tests first. Brute-force oracle (tests/unit/oracle.py: DP over stations x integer fuel units on
+Tests first. Brute-force oracle (tests/unit/planner/oracle.py: DP over stations x integer fuel units on
 small integer instances), timeboxed to about 50 seeded random cases.
 ```
 
@@ -704,7 +704,7 @@ small integer instances), timeboxed to about 50 seeded random cases.
 - oracle comparison on ~50 seeded cases;
 - reserve (optional): with `reserve_gallons = 5`, no leg between consecutive fuel points (start, stops, finish) exceeds 450 miles.
 
-**Done when:** all unit tests pass, the oracle agrees on every seeded case, and coverage of `planner/optimizer.py` is ≥ 95%.
+**Done when:** ✅ (2026-10-29: oracle agrees on all 50 seeds; 0.8 ms on 202 real candidates) all unit tests pass, the oracle agrees on every seeded case, and coverage of `planner/optimizer.py` is ≥ 95%.
 
 ---
 

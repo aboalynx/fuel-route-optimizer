@@ -141,18 +141,18 @@ description: "Task list for Feature 003: Refuel Optimizer"
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [ ] T012 Time `plan_refuelling` by hand (quickstart §4, SC-006): on the 202 real Dallas → Chicago candidates (Feature 002 quickstart §3, converted with `Decimal(float(m)).quantize(Decimal("0.001"))` as in the contract) and on a synthetic 3,000-mile list of ~400 stations. Target well under 10 ms. Note the figures and the machine.
-- [ ] T013 [P] Update `README.md`:
+- [X] T012 Time `plan_refuelling` by hand (quickstart §4, SC-006): on the 202 real Dallas → Chicago candidates (Feature 002 quickstart §3, converted with `Decimal(float(m)).quantize(Decimal("0.001"))` as in the contract) and on a synthetic 3,000-mile list of ~400 stations. Target well under 10 ms. Note the figures and the machine.
+- [X] T013 [P] Update `README.md`:
   - status (003 done);
   - assumptions (constitution VI): the vehicle starts with a full tank unless told otherwise; no safety reserve by default, so the range is the brief's 500 miles (a production default of 5 gal would be sensible; the reserve is an option); each stop's cost is rounded half up to cents and the total is the sum of the rounded stops; prices are never rounded before multiplying; detour fuel is ignored;
   - in "How it works", two sentences on the greedy (buy just enough to reach a cheaper station, else fill up) with a link to `docs/algorithms/refuelling-greedy.md`;
   - the measured timing and machine from T012.
-- [ ] T014 [P] Sync the docs: in `docs/algorithms/refuelling-greedy.md`, replace "Rounding: only at the API boundary" with "rounding happens once, when the plan is built (the money output); the API only formats" and mention fuel tracked in miles of range and the infeasible detail fields; in it and in `docs/adr/0001-greedy-refuelling-optimizer.md`, replace "under 1 ms" with the time measured in T012; in `docs/implementation-plan.md` Feature 003, sync the module/test names if they changed and tick "Done when".
-- [ ] T015 Quality gate:
+- [X] T014 [P] Sync the docs: in `docs/algorithms/refuelling-greedy.md`, replace "Rounding: only at the API boundary" with "rounding happens once, when the plan is built (the money output); the API only formats" and mention fuel tracked in miles of range and the infeasible detail fields; in it and in `docs/adr/0001-greedy-refuelling-optimizer.md`, replace "under 1 ms" with the time measured in T012; in `docs/implementation-plan.md` Feature 003, sync the module/test names if they changed and tick "Done when".
+- [X] T015 Quality gate:
   - `python -m pytest --cov=planner --cov-report=term-missing` → `planner/optimizer.py` ≥ 95% (SC-007), whole suite green;
   - `ruff check .` and `ruff format --check .`;
   - `python manage.py check`.
-- [ ] T016 Run the full quickstart.md validation (§1–§4) and confirm the outputs match the expected values there.
+- [X] T016 Run the full quickstart.md validation (§1–§4) and confirm the outputs match the expected values there.
 
 ---
 
