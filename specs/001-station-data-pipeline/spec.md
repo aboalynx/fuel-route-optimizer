@@ -1,0 +1,152 @@
+# Feature Specification: Station Data Pipeline
+
+**Feature Branch**: `001-station-data-pipeline`
+
+**Created**: 2026-10-29
+
+**Status**: Draft
+
+**Input**: User description: "Build the station data set used by the route planner. Input: the provided OPIS fuel price CSV (8,151 rows; no coordinates). Keep US stations only (drop Canadian provinces). One station per OPIS Truckstop ID; keep every raw price row; the station's price is the minimum of its rows (the data gives no reason for differing prices). Every kept station needs coordinates; use the centre of its city as a baseline. Stations whose city cannot be located are reported and excluded. The result must be reproducible by a reviewer with one command, and also shipped as ready-to-load data so the project runs without any network access. Print a report: rows read, Canadian rows dropped, stations kept, stations located, stations dropped. Out of scope: precise station coordinates (a later feature), the routing API."
+
+## User Scenarios & Testing *(mandatory)*
+
+### User Story 1 - Load ready-made station data offline (Priority: P1)
+
+A reviewer clones the project and wants the route planner to have its fuel station data
+immediately. They load the shipped station data with a single command, with no network access, no
+account and no extra downloads. Every loaded station is in the USA, has one effective price and has
+coordinates.
+
+**Why this priority**: Every later feature (corridor search, optimizer, API) needs this data. A
+reviewer who cannot get station data cannot evaluate anything else.
+
+**Independent Test**: On a fresh checkout with the network disabled, run the single load step and
+confirm the station and price records are present, with US states only, one price per station and
+coordinates on every station.
+
+**Acceptance Scenarios**:
+
+1. **Given** a fresh checkout with no station data loaded and no network, **When** the reviewer runs the single load step, **Then** all shipped stations and their raw price rows are available, and no network request is made.
+2. **Given** the loaded data, **When** any station is inspected, **Then** it has a US state, a name, an address, a city, an effective price and coordinates marked as "city centre".
+3. **Given** the loaded data, **When** stations are filtered by Canadian province codes, **Then** none are found.
+
+---
+
+### User Story 2 - Rebuild the station data with one command (Priority: P2)
+
+A maintainer or reviewer wants to see exactly how the shipped data was produced and to regenerate
+it from the provided price file. They run one command. It cleans the price file, merges rows per
+station, locates each station at its city centre using an offline place gazetteer, stores the
+result, re-exports the ready-to-load data and prints a summary report.
+
+**Why this priority**: Reproducibility makes the shipped data trustworthy and reviewable. It
+matters less than having the data available (P1), because the shipped copy already lets the
+project run.
+
+**Independent Test**: Run the rebuild command twice on the provided price file and compare the
+outputs. Then run it on a small sample file with known contents and compare the result with the
+expected stations and prices.
+
+**Acceptance Scenarios**:
+
+1. **Given** the provided price file (8,151 rows), **When** the rebuild command runs, **Then** it reports 8,151 rows read, 620 Canadian rows dropped and 6,626 US stations kept before location.
+2. **Given** a station ID that appears on several rows with different prices, **When** the data is rebuilt, **Then** the station has one record whose effective price is the minimum of its rows, and every raw row is kept with its original price.
+3. **Given** a station ID whose rows use different name spellings, **When** the data is rebuilt, **Then** the station's display name is the first spelling seen in the file.
+4. **Given** a price with 8 decimal places (e.g. 3.00733333), **When** the data is rebuilt and then loaded, **Then** the price reads back exactly, with no rounding.
+5. **Given** a station whose city cannot be found in the gazetteer, **When** the data is rebuilt, **Then** that station is excluded from the data set and listed in a reviewable file of unmatched cities.
+6. **Given** the rebuild has already run once, **When** it runs again on the same inputs, **Then** the stored data and the exported ready-to-load file are identical to the first run, byte for byte.
+7. **Given** the rebuild finishes, **When** the maintainer reads the report, **Then** it shows rows read, Canadian rows dropped, US price rows, stations kept, stations with several prices, stations located (count and percentage), stations dropped (with the path of the unmatched file), and the size of the place lookup data.
+
+---
+
+### User Story 3 - Ship a place lookup for later "City, ST" input (Priority: P3)
+
+The route-planning API (a later feature) must turn input like "Dallas, TX" into coordinates without
+an external call and without the large gazetteer file, which is not shipped. The rebuild command
+therefore also exports a compact, shipped lookup of US populated places. It uses the same name
+matching rules as the station locator.
+
+**Why this priority**: The API needs it, but nothing in this feature uses it directly. It can be
+validated on its own.
+
+**Independent Test**: After a rebuild, look up a few known city/state pairs in the exported lookup
+(e.g. Dallas, TX) and confirm they resolve to the same coordinates used for stations in those
+cities.
+
+**Acceptance Scenarios**:
+
+1. **Given** the rebuild has run, **When** the exported place lookup is inspected, **Then** it contains every place matched by a station city plus all populated places with a known population, and its size is a few megabytes.
+2. **Given** a city name written differently in the price file and the gazetteer (e.g. "ST LOUIS" vs "Saint Louis"), **When** it is looked up, **Then** both forms resolve to the same place.
+
+---
+
+### Edge Cases
+
+- **Trailing spaces.** 1,256 city values in the price file have trailing spaces. Values are trimmed before any matching.
+- **Abbreviated names.** City names with abbreviations or punctuation ("St.", "Ft", "Mt", "Mc Lean", hyphens, apostrophes) are normalised the same way on both sides before matching.
+- **Duplicate place names.** When several places in one state share a normalised name, the most populous one wins, and the lowest gazetteer ID breaks remaining ties.
+- **Defunct places.** Historical, abandoned or destroyed places in the gazetteer are never used.
+- **Alternate names.** An alternate place name is used only when no primary name matches, to avoid false matches.
+- **Exact duplicate rows.** 81 IDs have rows with the same price. They become one station, and every raw row is kept.
+- **Gazetteer missing.** If the gazetteer file is not present when rebuilding, the command stops with a clear message saying where to get it. The shipped data is unaffected.
+- **Low match rate.** If fewer than 95% of stations are located, the rebuild still completes and reports the share. The feature is not accepted until the name normalisation is improved.
+
+## Requirements *(mandatory)*
+
+### Functional Requirements
+
+- **FR-001**: The system MUST read the provided fuel price file and trim leading and trailing whitespace from every value.
+- **FR-002**: The system MUST drop every row whose state is a Canadian province or territory code (AB, BC, MB, NB, NL, NS, NT, NU, ON, PE, QC, SK, YT).
+- **FR-003**: The system MUST produce exactly one station per OPIS Truckstop ID among the remaining rows.
+- **FR-004**: The system MUST keep every raw US price row, with its rack ID, raw name and price, linked to its station.
+- **FR-005**: The system MUST set each station's effective price to the minimum price across its rows.
+- **FR-006**: The system MUST use the first name spelling seen in the file as the station's display name.
+- **FR-007**: The system MUST store prices exactly as given in the file (up to 8 decimal places), with no rounding at any stage of this feature.
+- **FR-008**: The system MUST give each station the coordinates of its city centre, found by matching (city, state) against an offline gazetteer of US populated places.
+- **FR-009**: The system MUST apply one name-normalisation rule to both gazetteer names and price-file cities: lower case; remove periods and apostrophes; hyphens to spaces; collapse spaces; expand st→saint, ste→sainte, ft→fort, mt→mount; join "mc x" into "mcx".
+- **FR-010**: The system MUST ignore historical, abandoned and destroyed places. It MUST resolve name collisions within a state by highest population, then lowest gazetteer ID. It MUST use alternate names only as a fallback when the primary name does not match.
+- **FR-011**: The system MUST record the coordinate source of every station as "city centre", and leave the match score empty (reserved for the later precision feature).
+- **FR-012**: The system MUST exclude stations whose city cannot be located, and MUST write them (ID, name, city, state) to a reviewable unmatched-cities file.
+- **FR-013**: The system MUST replace previously built data on every rebuild rather than adding to it. Two consecutive rebuilds on the same inputs MUST produce identical stored records, including record identifiers, and an identical exported file.
+- **FR-014**: The system MUST export the stations and their price rows to a shipped, ready-to-load data file, in a stable order (by station ID).
+- **FR-015**: Loading the shipped data MUST need one command and no network access, and MUST NOT need the gazetteer file.
+- **FR-016**: The system MUST export a compact, shipped place lookup (normalised name, display name, state, coordinates, population). It MUST cover every populated place with a known population, plus every place matched by a station city.
+- **FR-017**: The rebuild MUST be a single command. It MUST accept the price file and gazetteer locations as optional inputs (with project defaults), and it MUST be able to skip the export step.
+- **FR-018**: At the end of a rebuild the system MUST print a report. The report MUST show:
+  - rows read;
+  - Canadian rows dropped;
+  - US price rows;
+  - stations kept;
+  - stations with several prices;
+  - stations located (count and percentage, by coordinate source);
+  - stations dropped (with the unmatched-file location);
+  - the place lookup's size (places and megabytes).
+- **FR-019**: The rebuild MUST NOT make any network request.
+
+### Key Entities
+
+- **Fuel station**: one physical truck stop, identified by its OPIS Truckstop ID. Attributes: display name, address, city, state, effective price (minimum of its rows), coordinates, coordinate source ("city centre" now, "precise" in a later feature), match score (empty for now).
+- **Price row**: one raw row from the price file for a US station. Attributes: rack ID, name as written in that row, price exactly as written. Each price row belongs to exactly one station; a station has one or more price rows.
+- **Place**: a US populated place from the gazetteer. Attributes: normalised name, display name, state, coordinates, population. Used to locate stations and, later, to resolve user input.
+- **Rebuild report**: the summary printed at the end of a rebuild (see FR-018). It is not stored, but its numbers are copied into the project documentation.
+
+## Success Criteria *(mandatory)*
+
+### Measurable Outcomes
+
+- **SC-001**: On the provided price file, the rebuild reports 8,151 rows read, 620 Canadian rows dropped, 7,531 US price rows and 6,626 stations kept before location. 0 Canadian stations remain.
+- **SC-002**: At least 95% of the 6,626 stations are located. Every dropped station appears in the unmatched-cities file.
+- **SC-003**: Every one of the 568 stations with several price rows has an effective price equal to the minimum of its rows. A price of 3.00733333 reads back exactly after rebuild and load.
+- **SC-004**: Two consecutive rebuilds produce byte-for-byte identical exported data and identical record identifiers.
+- **SC-005**: A reviewer on a fresh checkout with no network access has all station data available after one load command, and the load takes under 1 minute on a typical laptop.
+- **SC-006**: The rebuild from the provided price file completes in under 5 minutes on a typical laptop.
+- **SC-007**: The shipped place lookup is under 10 MB, and the shipped station data is under 50 MB. Both are far below common repository file-size limits.
+
+## Assumptions
+
+- **Gazetteer.** The offline gazetteer is the GeoNames US file. It is downloaded once by the maintainer, is not shipped, and is needed only to rebuild. The README gives its source.
+- **Minimum price rule.** The data does not explain why one station has several prices, so the minimum is used, because the station does sell at that price. Every raw row is kept, so another rule (such as the mean) could be applied later without re-reading the file.
+- **Accuracy.** City-centre coordinates may be several miles from the real station. Precise coordinates are a later feature, and the route search compensates with a corridor radius.
+- **Excluded stations.** Stations that cannot be located are a small share and are acceptable as long as they are listed for review.
+- **Scope.** The routing API, precise station coordinates, corridor search and the optimizer are out of scope. The place lookup is produced here only because it comes from the same gazetteer pass; it is used later by the API.
+- **No network.** The project's default local storage is used. No external service is contacted during rebuild or load.
