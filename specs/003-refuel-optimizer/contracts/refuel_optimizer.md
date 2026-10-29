@@ -35,8 +35,8 @@ def round_cents(amount_usd: Decimal) -> Decimal: ...  # quantize 0.01, ROUND_HAL
 | Error | When | Feature 004 maps to |
 | --- | --- | --- |
 | `ValueError` / `TypeError` | Input cannot describe a real trip (data-model rules) | HTTP 400 `invalid_input` |
-| `InfeasibleRoute(STATION_GAP, …)` | A stretch between fuel points is longer than the usable range | HTTP 422 `route_infeasible`, body has `reason`, `gap_start_mile`, `gap_end_mile`, `usable_range_miles` |
-| `InfeasibleRoute(START_FUEL_INSUFFICIENT, …)` | The usable start fuel cannot reach the first fuel point | HTTP 422 `route_infeasible`, body also has `start_fuel_gallons`, `gallons_short`, `reserve_gallons` |
+| `InfeasibleRoute(STATION_GAP, …)` | A stretch between fuel points is longer than the usable range | HTTP 422 `infeasible_route`, body has `reason`, `gap_start_mile`, `gap_end_mile`, `usable_range_miles` |
+| `InfeasibleRoute(START_FUEL_INSUFFICIENT, …)` | The usable start fuel cannot reach the first fuel point | HTTP 422 `infeasible_route`, body also has `start_fuel_gallons`, `gallons_short`, `reserve_gallons` |
 
 **Caller duties (Feature 004 request service):**
 
