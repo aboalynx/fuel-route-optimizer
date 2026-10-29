@@ -36,11 +36,13 @@ def round_cents(amount_usd: Decimal) -> Decimal: ...  # quantize 0.01, ROUND_HAL
 | --- | --- | --- |
 | `ValueError` / `TypeError` | Input cannot describe a real trip (data-model rules) | HTTP 400 `invalid_input` |
 | `InfeasibleRoute(STATION_GAP, …)` | A stretch between fuel points is longer than the usable range | HTTP 422 `route_infeasible`, body has `reason`, `gap_start_mile`, `gap_end_mile`, `usable_range_miles` |
-| `InfeasibleRoute(START_FUEL_INSUFFICIENT, …)` | The usable start fuel cannot reach the first fuel point | HTTP 422 `route_infeasible`, body also has `start_fuel_gallons`, `gallons_short` |
+| `InfeasibleRoute(START_FUEL_INSUFFICIENT, …)` | The usable start fuel cannot reach the first fuel point | HTTP 422 `route_infeasible`, body also has `start_fuel_gallons`, `gallons_short`, `reserve_gallons` |
 
 **Caller duties (Feature 004 request service):**
 
 - read `Decimal(str(settings.VEHICLE_MPG))` and `Decimal(str(settings.VEHICLE_MAX_RANGE_MILES))`;
 - convert each 002 `Candidate` to `PlanStation`, quantizing `mile_marker` and the route distance to
-  0.001 mi and clamping a marker above the distance down to it (research R5);
+  0.001 mi and clamping a marker above the distance down to it, then **re-sorting by
+  `(mile_marker, opis_id)`**: two float markers less than 0.0005 mi apart can quantize to the same
+  mile in the wrong ID order, and the optimizer rejects unsorted input as invalid (research R5);
 - pass the request's `start_fuel_gallons` (or `None`) and `reserve_gallons` (or 0).

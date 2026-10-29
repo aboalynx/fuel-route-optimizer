@@ -56,6 +56,7 @@ class InfeasibleRoute(Exception):
         usable_range_miles: Decimal,
         start_fuel_gallons: Decimal | None = None,
         gallons_short: Decimal | None = None,
+        reserve_gallons: Decimal = Decimal(0),
     ):
         self.reason = reason
         self.gap_start_mile = gap_start_mile
@@ -63,10 +64,13 @@ class InfeasibleRoute(Exception):
         self.usable_range_miles = usable_range_miles
         self.start_fuel_gallons = start_fuel_gallons
         self.gallons_short = gallons_short
+        self.reserve_gallons = reserve_gallons
         if reason == InfeasibleReason.START_FUEL_INSUFFICIENT:
+            kept = f" ({_fmt(reserve_gallons)} gal kept as reserve)" if reserve_gallons else ""
             message = (
-                f"{reason}: {_fmt(start_fuel_gallons)} gal covers {_fmt(gap_start_mile)} mi, "
-                f"next fuel point at mile {_fmt(gap_end_mile)} ({_fmt(gallons_short)} gal short)"
+                f"{reason}: {_fmt(start_fuel_gallons)} gal{kept} covers "
+                f"{_fmt(gap_start_mile)} mi, next fuel point at mile {_fmt(gap_end_mile)} "
+                f"({_fmt(gallons_short)} gal short)"
             )
         else:
             message = (
@@ -114,7 +118,11 @@ def plan_refuelling(
         j, cheaper = _next_node(nodes, i, capacity)
         if j is None:  # nothing within a full tank, whatever the start fuel
             raise InfeasibleRoute(
-                InfeasibleReason.STATION_GAP, here.mile, nodes[i + 1].mile, capacity
+                InfeasibleReason.STATION_GAP,
+                here.mile,
+                nodes[i + 1].mile,
+                capacity,
+                reserve_gallons=reserve_gallons,
             )
         leg = nodes[j].mile - here.mile
         buy = max(Decimal(0), leg - fuel) if cheaper else capacity - fuel
@@ -126,6 +134,7 @@ def plan_refuelling(
                 capacity,
                 start_fuel_gallons=start_fuel_gallons,
                 gallons_short=buy / mpg,
+                reserve_gallons=reserve_gallons,
             )
         if buy > 0:
             gallons = buy / mpg

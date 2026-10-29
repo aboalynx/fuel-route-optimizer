@@ -66,7 +66,12 @@ def test_start_fuel_short_of_the_first_station_counts_only_fuel_above_the_reserv
     assert error.reason == InfeasibleReason.START_FUEL_INSUFFICIENT
     assert (error.gap_start_mile, error.gap_end_mile) == (100, 150)
     assert error.start_fuel_gallons == 15
+    assert error.reserve_gallons == 5
     assert error.gallons_short == 5
+    assert str(error) == (
+        "start fuel insufficient: 15 gal (5 gal kept as reserve) covers 100 mi, "
+        "next fuel point at mile 150 (5 gal short)"
+    )
 
 
 def test_start_fuel_below_the_reserve_is_invalid_input():

@@ -74,9 +74,11 @@ Any rule broken → `ValueError` (a non-`Decimal` number → `TypeError`). Featu
 | `usable_range_miles` | `Decimal` | `max_range_miles − reserve·mpg` |
 | `start_fuel_gallons` | `Decimal \| None` | Only for `START_FUEL_INSUFFICIENT` |
 | `gallons_short` | `Decimal \| None` | Only for `START_FUEL_INSUFFICIENT`: `(gap_end − gap_start) / mpg` |
+| `reserve_gallons` | `Decimal` | The reserve in force (0 by default); the message names it when > 0 |
 
 `str()` is readable, e.g. `start fuel insufficient: 10 gal covers 100 mi, next fuel point at mile
-150 (5 gal short)` and `station gap: no fuel point between mile 100 and mile 700 (range 500 mi)`.
+150 (5 gal short)`, with a reserve `start fuel insufficient: 15 gal (5 gal kept as reserve) covers
+100 mi, …`, and `station gap: no fuel point between mile 100 and mile 700 (range 500 mi)`.
 
 ## Flow
 
