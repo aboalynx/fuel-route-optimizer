@@ -213,15 +213,17 @@ Response shape. The numbers are illustrative, not measured:
   "start":  {"query": "Dallas, TX",  "lat": 32.78, "lng": -96.80},
   "finish": {"query": "Chicago, IL", "lat": 41.88, "lng": -87.63},
   "summary": {
-    "distance_miles": 925.4, "total_gallons_consumed": 92.54, "gallons_purchased": 42.54,
-    "total_fuel_cost_usd": 129.28, "stops_count": 1,
+    "distance_miles": 925.432, "total_gallons_consumed": 92.5432, "gallons_purchased": 42.5432,
+    "total_fuel_cost_usd": 129.30, "stops_count": 1,
+    "stops_dropped": 0, "extra_cost_vs_cheapest_usd": 0.00,
     "assumptions": {"mpg": 10, "max_range_miles": 500, "tank_capacity_gallons": 50,
-                    "start_fuel_gallons": 50, "corridor_miles": 10}
+                    "start_fuel_gallons": 50, "corridor_miles": 10, "reserve_gallons": 0,
+                    "min_saving_per_stop_usd": 0}
   },
   "fuel_stops": [
     {"sequence": 1, "opis_id": 3163, "name": "QUIKTRIP #71", "city": "Tulsa", "state": "OK",
      "lat": 36.15, "lng": -95.99, "geo_source": "city_centroid", "mile_marker": 262.4,
-     "off_route_miles": 1.8, "price_usd_per_gallon": 3.039, "gallons": 42.54, "cost_usd": 129.28}
+     "off_route_miles": 1.8, "price_usd_per_gallon": 3.03933333, "gallons": 42.5432, "cost_usd": 129.30}
   ],
   "map": {"type": "FeatureCollection", "features": ["<route LineString>", "<stop Points>"]},
   "meta": {"routing_provider": "osrm", "routing_calls": 1, "cached": false,

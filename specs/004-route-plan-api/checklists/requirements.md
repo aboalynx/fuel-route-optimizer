@@ -43,8 +43,9 @@
   Specify input. Two small defaults were added here and recorded in Assumptions: a 30-second
   default retry hint, and a station-data-missing 503.
 - **Measured by hand:** SC-004 (timings) and SC-005 (real request and map renders).
-- **Iteration 2 (user request):** added User Story 6 / FR-015, a minimum saving per stop (default
-  $5, 0 = off). Checked again: all items still pass. The rule is described by what the client sees
+- **Iteration 2 (user request):** added User Story 6 / FR-015, a minimum saving per stop
+  (`min_saving_per_stop_usd`, default 0 = off after clarification, so the default response is the
+  cheapest plan). Checked again: all items still pass. The rule is described by what the client sees
   (which stops remain, stops dropped, extra cost), not by code. It was prototyped on the real
   Dallas → Chicago route first: dropping a station from all candidates cascaded (similar stations
   replace each other; +$34.98), so the spec restricts dropping to the plan's own stops (+$0.17).

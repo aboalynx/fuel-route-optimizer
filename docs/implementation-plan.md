@@ -139,13 +139,13 @@ Address, City, State, Rack ID, Retail Price`. There are no coordinates.
 | D7 | Storage | SQLite by default for zero-setup review. The database is configurable with `DATABASE_URL` (django-environ), e.g. PostgreSQL; psycopg is not in `requirements.txt`. Production path: PostgreSQL + PostGIS, where a spatial index would replace the in-memory KD-tree. Two tables plus a committed fixture; stations are held in memory after first use | 001, 002 |
 | D8 | HTTP method | `POST /api/v1/route-plan/` with a JSON body. `GET` with query params is **optional**, and the first thing to drop if time is short | 004 |
 | D9 | Station coordinates | City-centroid baseline, then offline OSM matching (stretch) with `--skip-osm` | 001, 005 |
-| D10 | Money in JSON | `Decimal` internally. JSON numbers rounded at the boundary: USD 2 dp, gallons 2 dp, price 3 dp, ROUND_HALF_UP | 003, 004 |
+| D10 | Money in JSON | `Decimal` internally. JSON numbers at the boundary: USD 2 dp (ROUND_HALF_UP), gallons 4 dp, price per gallon exact as stored (up to 8 dp). Total = sum of the rounded per-stop costs. Shown gallons × shown price is within half a cent of the shown cost (exact gallons at the default 10 mpg, so only the cent rounding differs). Updated in 004's clarification: with price 3 dp and gallons 2 dp a reviewer's check could be off by a few cents | 003, 004 |
 
 ### 4.3 Remaining tensions with the constitution
 
 | Tension | Where | Resolution |
 | --- | --- | --- |
-| Principle V requires `Decimal` money, but OSRM distances, numpy geometry and the `VEHICLE_*` settings are floats | 001, 002, 003 | Geometry stays in float miles. The service converts mile markers, distance and the vehicle settings to `Decimal` (via `str()`, miles quantized to 0.001) **before** the optimizer. Prices are stored exactly (`DecimalField(12, 8)`, up to 8 dp as in the CSV) and come from the DB as `Decimal`. Rounding happens only in the serializer (D10: price 3 dp, gallons 2 dp, USD 2 dp, ROUND_HALF_UP) |
+| Principle V requires `Decimal` money, but OSRM distances, numpy geometry and the `VEHICLE_*` settings are floats | 001, 002, 003 | Geometry stays in float miles. The service converts mile markers, distance and the vehicle settings to `Decimal` (via `str()`, miles quantized to 0.001) **before** the optimizer. Prices are stored exactly (`DecimalField(12, 8)`, up to 8 dp as in the CSV) and come from the DB as `Decimal`. Rounding happens only at the output (D10: USD 2 dp ROUND_HALF_UP, gallons 4 dp, price exact up to 8 dp) |
 | Principle VII vs. a second routing provider | 002 | Valhalla is a stretch goal. Ship OSRM first; the interface makes adding a provider a local change |
 | Principle VIII vs. `"City, ST"` input | 001, 004 | `data/geonames/US.txt` is git-ignored, so the pipeline exports a small **committed places index** for the request path |
 
@@ -261,19 +261,22 @@ Content-Type: application/json
   "start":  {"query": "Dallas, TX",  "lat": 32.78, "lng": -96.80},
   "finish": {"query": "Chicago, IL", "lat": 41.88, "lng": -87.63},
   "summary": {
-    "distance_miles": 925.4,
-    "total_gallons_consumed": 92.54,
-    "gallons_purchased": 42.54,
-    "total_fuel_cost_usd": 129.28,
+    "distance_miles": 925.432,
+    "total_gallons_consumed": 92.5432,
+    "gallons_purchased": 42.5432,
+    "total_fuel_cost_usd": 129.30,
     "stops_count": 1,
+    "stops_dropped": 0,
+    "extra_cost_vs_cheapest_usd": 0.00,
     "assumptions": {"mpg": 10, "max_range_miles": 500, "tank_capacity_gallons": 50,
-                    "start_fuel_gallons": 50, "corridor_miles": 10, "reserve_gallons": 0}
+                    "start_fuel_gallons": 50, "corridor_miles": 10, "reserve_gallons": 0,
+                    "min_saving_per_stop_usd": 0}
   },
   "fuel_stops": [
     {"sequence": 1, "opis_id": 3163, "name": "QUIKTRIP #71", "address": "...",
      "city": "Tulsa", "state": "OK", "lat": 36.15, "lng": -95.99,
      "geo_source": "city_centroid", "mile_marker": 262.4, "off_route_miles": 1.8,
-     "price_usd_per_gallon": 3.039, "gallons": 42.54, "cost_usd": 129.28}
+     "price_usd_per_gallon": 3.03933333, "gallons": 42.5432, "cost_usd": 129.30}
   ],
   "map": {"type": "FeatureCollection", "features": ["<route LineString>", "<stop Points>"]},
   "meta": {"routing_provider": "osrm", "routing_calls": 1, "cached": false,
