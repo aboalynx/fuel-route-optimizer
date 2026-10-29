@@ -806,6 +806,16 @@ and a small station fixture.
 
 **Done when:** the endpoint works end to end against real OSRM locally (Dallas → Chicago), all mocked tests are green, and the map page renders Dallas → Chicago and New York → Los Angeles.
 
+**As built (2026-10-30), changes from the inputs above:**
+
+- The request service is `api/services/route_plan.py` (the `api` app's services, per the constitution), not `planner/services/`; the place lookup is `planner/locations.py` + `api/services/places.py`; the route cache is `routing/cached.py`.
+- New: `min_saving_per_stop_usd` (0–100, default 0 = off), `planner/fewer_stops.py`, see the algorithm doc's "Fewer stops".
+- D10 precision: money 2 dp, gallons 4 dp, price exact as stored; `fuel_left_gallons` and `name` in the response.
+- Errors: `invalid_input` also for start fuel/reserve that do not fit the tank (`details.field`), `place_data_missing` (503) and `internal_error` (500, never leaks the exception).
+- Same location: 4-dp rounding before routing, plus a guard for routes shorter than 0.01 mile.
+- `"New York, NY"` is an explicit alias for GeoNames' "New York City".
+- Measured: Dallas → Chicago 1.29 s first request, 64 ms cached; New York → Los Angeles 0.84 s, 16 stops (6 with a $5 minimum saving).
+
 ---
 
 ### Feature 005: osm-precision-layer (stretch, only if time allows)

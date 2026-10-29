@@ -41,6 +41,10 @@ spec's clarifications (stop-saving default 0, output precision, same location) a
       functions come from `stations/pipeline/geonames.py` (pure), the same rules the pipeline
       used, so every city a station was matched to also resolves.
     - Not found → `location_not_found` naming the input.
+    - **Alias (found during implementation):** GeoNames' main name for New York is "New York
+      City", and the place file keeps main names only, so `"New York, NY"` failed. An explicit
+      `ALIASES` table maps `("new york", "NY")` → `"new york city"`. A general "append City" rule
+      was rejected: it would silently resolve e.g. "Carson, NV" to Carson City.
   - **Coordinates:** validated as numbers in −90..90 / −180..180 (400 `invalid_input`
     otherwise). Inside the USA when the nearest place in the file is within 25 miles: a `cKDTree`
     on 3D unit vectors of the ~31,500 places, queried with the chord for 25 miles

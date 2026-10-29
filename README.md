@@ -20,7 +20,7 @@ The vehicle has a 500-mile range and does 10 miles per gallon.
 - [x] 001 station-data-pipeline: clean CSV, geocode stations offline, committed fixture (done)
 - [x] 002 route-candidates: one routing call + KD-tree corridor search (done)
 - [x] 003 refuel-optimizer: optimal greedy refuelling plan (done)
-- [ ] 004 route-plan-api: `POST /api/v1/route-plan/` + Leaflet map page (planned)
+- [x] 004 route-plan-api: `POST /api/v1/route-plan/` + Leaflet map page (done)
 - [ ] 005 osm-precision-layer: exact station coordinates from OpenStreetMap (planned, stretch)
 
 ## How it works
@@ -71,6 +71,19 @@ brute-force optimum on 50 seeded random trips. Details:
 returns the reason and the exact gap (for example "station gap: no fuel point between mile 100 and
 mile 700"), never a partial plan.
 
+**Fewer stops, optionally.** A purely cost-optimal plan can stop for 1.3 gallons to save 10
+cents. Set `min_saving_per_stop_usd` (0–100, default 0 = off) and a stop is kept only if dropping
+it would cost at least that much more, or the trip cannot be done without it. Only the plan's own
+stops are dropped, never swapped for other stations, so the extra cost stays small and is
+reported (`stops_dropped`, `extra_cost_vs_cheapest_usd`). The default response is always the
+provable minimum-cost plan. Details: "Fewer stops" in
+[docs/algorithms/refuelling-greedy.md](docs/algorithms/refuelling-greedy.md).
+
+**Route cache.** A route is cached in-process for 24 hours, keyed by provider and start/finish
+coordinates rounded to 4 decimals. A repeat request makes 0 routing calls. Only the route is
+cached, never the plan, so changing start fuel, radius, reserve or minimum saving re-plans on the
+cached route. Failures are never cached.
+
 **Measured on a 2018 MacBook Pro (Intel i7-8750H, Python 3.15.2):**
 
 - Dallas, TX → Chicago, IL routing call: 966.5 miles, 9,149 route points, 0.5–0.8 s.
@@ -79,6 +92,20 @@ mile 700"), never a partial plan.
 - Station index: built once per process on first use, in about 0.1 s.
 - Refuelling plan on the 202 Dallas → Chicago candidates: 4 stops, $134.64, in 0.8 ms.
 - Refuelling plan on a synthetic 3,000-mile route with 400 stations: 1.2 ms.
+
+**Measured API requests (same machine, real OSRM, `runserver`):**
+
+| Request | Result | `routing_calls` | `timings_ms.total` |
+| --- | --- | --- | --- |
+| Dallas, TX → Chicago, IL, first request in a new process | 966.3 mi, 4 stops, $134.59 | 1 | 1,288 (routing 734; first-use place index 390 and station index 162 included) |
+| Same, repeated | identical plan | 0 (cached) | 64 (83 wall clock) |
+| Same with `min_saving_per_stop_usd: 5` | 2 stops, $134.76 (+$0.17; the 4.2-gal and 1.3-gal stops dropped) | 0 | 64 |
+| New York, NY → Los Angeles, CA | 2,793.9 mi, 16 stops, $693.26 | 1 | 839 (routing 755) |
+| Same, repeated | identical plan | 0 (cached) | 233 |
+| Same with `min_saving_per_stop_usd: 5` | 6 stops, $700.38 (+$7.12) | 0 | 187 |
+
+The Dallas start is the city centre from the place lookup, so these figures differ slightly from
+the coordinate-based numbers above.
 
 ## Tech stack
 
@@ -100,8 +127,19 @@ python -m pytest
 ```
 
 `loaddata stations` loads the committed `stations/fixtures/stations.json` (6,620 stations, 7,524
-price rows). It needs no network access and no gazetteer download. Running the API is planned
-(feature 004).
+price rows). It needs no network access and no gazetteer download.
+
+### Run the API and the map page
+
+```bash
+python manage.py runserver
+```
+
+Open <http://localhost:8000/> for the map page (enter a start and a finish), or call the API
+directly (see [API](#api)). A Postman collection is in
+[postman/fuel_route_optimizer.postman_collection.json](postman/fuel_route_optimizer.postman_collection.json).
+No API key is needed: routing uses the public OSRM demo server and the map uses OpenStreetMap
+tiles.
 
 ### Rebuild station data (optional)
 
@@ -139,6 +177,8 @@ Set these in `.env`. Every setting has a default.
 | `ROUTING_PROVIDER` | `osrm` | Routing provider |
 | `OSRM_BASE_URL` | `https://router.project-osrm.org` | OSRM server |
 | `ROUTING_TIMEOUT_SECONDS` | 8 | Routing request timeout |
+| `ROUTING_RETRY_AFTER_SECONDS` | 30 | `Retry-After` sent with a 503 when the routing service suggests none |
+| `ROUTE_CACHE_TTL_SECONDS` | 86400 | How long a route stays in the in-process cache |
 | `FUEL_PRICES_CSV` | `data/fuel-prices-for-be-assessment.csv` | Input price file |
 | `GEONAMES_FILE` | `data/geonames/US.txt` | Gazetteer (needed only to rebuild station data) |
 | `DATABASE_URL` | `sqlite:///<project>/db.sqlite3` | Database (e.g. PostgreSQL; psycopg is not included) |
@@ -193,55 +233,74 @@ wrong match, because a wrong location is worse than a missing one.
 10. The "inside the USA" check for coordinates uses the nearest US populated place within 25 miles. Points just across the border (e.g. Windsor, Ontario, next to Detroit) can therefore be accepted.
 11. There is no safety reserve by default (`reserve_gallons = 0`), so the range is the brief's 500 miles. A reserve of 0–25 gallons can be requested; the tank then never drops below it (with 5 gallons, no leg is longer than 450 miles). In production a default of about 5 gallons would be sensible.
 12. Money is exact: prices are never rounded before multiplying. Each stop's cost is rounded half up to cents, and the total cost is the sum of the rounded stop costs, so the stops always add up to the total shown.
-13. A purely cost-optimal plan can include two stops close together for a small saving (see future work).
+13. A purely cost-optimal plan can include two stops close together for a small saving. `min_saving_per_stop_usd` (off by default) drops stops that save less than it; it gives fewer stops, not always the fewest possible.
+14. `"City, ST"` needs a 2-letter state code (case-insensitive; the 50 states and DC). Full state names are rejected with a hint, and Canadian provinces and US territories are outside the station data. A city resolves to its GeoNames centre; `"New York, NY"` is an alias for GeoNames' "New York City".
+15. Coordinates are echoed as given, and `name` is the nearest place found by the 25-mile check.
+16. The route cache is per server process (Django's LocMem cache) and stores the route only.
+17. The map line in the response is thinned to at most about 5,000 points; stops, distances and costs come from the full route.
+18. Response precision: money 2 decimals (half up), gallons 4 decimals, price per gallon exactly as stored (up to 8 decimals), miles 3 decimals. For every stop, gallons × price is within half a cent of the cost shown.
 
-## API (planned, feature 004)
+## API
 
 ```http
 POST /api/v1/route-plan/
 Content-Type: application/json
 
-{ "start": "Dallas, TX", "finish": "Chicago, IL" }
-// or {"start": {"lat": 32.78, "lng": -96.80}, "finish": {"lat": 41.88, "lng": -87.63}}
-// optional: "start_fuel_gallons": 50, "corridor_miles": 10
+{"start": "Dallas, TX", "finish": "Chicago, IL"}
 ```
 
-Response shape. The numbers are illustrative, not measured:
+| Field | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `start`, `finish` | `"City, ST"` or `{"lat": .., "lng": ..}` | required | Inside the USA |
+| `start_fuel_gallons` | number | full tank (50) | 0 to tank capacity |
+| `corridor_miles` | number | 10 | 1–25 |
+| `reserve_gallons` | number | 0 | 0–25; the tank never drops below it |
+| `min_saving_per_stop_usd` | number | 0 (off) | 0–100; see "Fewer stops" above |
+
+Unknown fields are rejected, so a typo is never silently ignored. `GET /api/v1/route-plan/?start=Dallas,%20TX&finish=Chicago,%20IL`
+(coordinates as `lat,lng`) returns the same response.
+
+Response for Dallas → Chicago with `"min_saving_per_stop_usd": 5`, measured (only the first stop shown; the full contract is in
+[specs/004-route-plan-api/contracts/route_plan_api.md](specs/004-route-plan-api/contracts/route_plan_api.md)):
 
 ```json
 {
-  "start":  {"query": "Dallas, TX",  "lat": 32.78, "lng": -96.80},
-  "finish": {"query": "Chicago, IL", "lat": 41.88, "lng": -87.63},
+  "start":  {"query": "Dallas, TX",  "name": "Dallas, TX",  "lat": 32.78306, "lng": -96.80667},
+  "finish": {"query": "Chicago, IL", "name": "Chicago, IL", "lat": 41.85003, "lng": -87.65005},
   "summary": {
-    "distance_miles": 925.432, "total_gallons_consumed": 92.5432, "gallons_purchased": 42.5432,
-    "total_fuel_cost_usd": 129.30, "stops_count": 1,
-    "stops_dropped": 0, "extra_cost_vs_cheapest_usd": 0.00,
+    "distance_miles": 966.296, "total_gallons_consumed": 96.6296, "gallons_purchased": 46.6296,
+    "fuel_left_gallons": 0, "total_fuel_cost_usd": 134.76, "stops_count": 2,
+    "stops_dropped": 2, "extra_cost_vs_cheapest_usd": 0.17,
     "assumptions": {"mpg": 10, "max_range_miles": 500, "tank_capacity_gallons": 50,
                     "start_fuel_gallons": 50, "corridor_miles": 10, "reserve_gallons": 0,
-                    "min_saving_per_stop_usd": 0}
+                    "min_saving_per_stop_usd": 5}
   },
   "fuel_stops": [
-    {"sequence": 1, "opis_id": 3163, "name": "QUIKTRIP #71", "city": "Tulsa", "state": "OK",
-     "lat": 36.15, "lng": -95.99, "geo_source": "city_centroid", "mile_marker": 262.4,
-     "off_route_miles": 1.8, "price_usd_per_gallon": 3.03933333, "gallons": 42.5432, "cost_usd": 129.30}
+    {"sequence": 1, "opis_id": 68256, "name": "EXTRA MILE TRUCK STOP", "address": "I-30 EXIT 208",
+     "city": "Hooks", "state": "TX", "lat": 33.46623, "lng": -94.28853, "geo_source": "city_centroid",
+     "mile_marker": 163.438, "off_route_miles": 0.567, "price_usd_per_gallon": 2.81733333,
+     "gallons": 16.3438, "cost_usd": 46.05}
   ],
-  "map": {"type": "FeatureCollection", "features": ["<route LineString>", "<stop Points>"]},
-  "meta": {"routing_provider": "osrm", "routing_calls": 1, "cached": false,
-           "candidate_stations_considered": 187,
-           "timings_ms": {"resolve": 1, "routing": 640, "candidates": 4, "optimize": 1, "total": 660}}
+  "map": {"type": "FeatureCollection", "features": ["<route LineString>", "<numbered stop Points>"]},
+  "meta": {"routing_provider": "osrm", "routing_calls": 0, "cached": true,
+           "candidate_stations_considered": 202,
+           "timings_ms": {"resolve": 0, "routing": 31, "candidates": 31, "optimize": 1, "total": 64}}
 }
 ```
 
+Errors always have the body `{"error": {"code", "message", "details"}}`:
+
 | Status | `error.code` | When |
 | --- | --- | --- |
-| 400 | `invalid_input` | Malformed body, out-of-range parameters |
-| 400 | `location_not_found` | Unknown `"City, ST"`, or the state is not a 2-letter code |
-| 400 | `location_outside_us` | Coordinates or state not in the USA |
-| 400 | `same_location` | Start and finish resolve to the same point |
-| 422 | `infeasible_route` | A stretch longer than the vehicle range with no reachable station, or the start fuel cannot reach the first fuel point (the body gives the reason, the gap miles and the gallons short) |
-| 503 | `routing_unavailable` | Routing provider down or timed out |
-
-Response timings for cold and cached routes are TBD after feature 004.
+| 400 | `invalid_input` | Malformed body, unknown fields, out-of-range values, or start fuel/reserve that do not fit the tank (`details.field` names it) |
+| 400 | `location_not_found` | Unknown `"City, ST"`, or the state is not a 2-letter code (`details.field` is `start` or `finish`) |
+| 400 | `location_outside_us` | Coordinates more than 25 miles from any US place, or a non-US state/territory |
+| 400 | `same_location` | Start and finish are the same point (4-decimal rounding), or the route is shorter than 0.01 mile |
+| 422 | `infeasible_route` | A stretch longer than the vehicle range with no station, or the start fuel cannot reach the first fuel point; `details` give the reason, the gap miles and coordinates, and the gallons short |
+| 503 | `routing_unavailable` | Routing timed out, failed, was rate-limited or found no route; `Retry-After` header |
+| 503 | `station_data_missing` | Station data not loaded (run `python manage.py loaddata stations`) |
+| 503 | `place_data_missing` | `data/places/us_places.csv.gz` missing or unreadable |
+| 500 | `internal_error` | An unexpected error; the details are logged, never returned |
 
 ## Testing and quality
 
@@ -274,7 +333,8 @@ any part of it.
 - Detour cost for off-route stations
 - Live prices
 - A truck routing profile
-- A minimum saving per extra stop (a purely cost-optimal plan can add a nearby stop for a small saving)
+- The fewest possible stops for a given minimum saving (an exact search over stations and fuel levels); today's rule only removes stops from the cheapest plan
+- A compact cache format for long routes (unpickling a 30,000-point cached route takes ~80 ms)
 - Mark 3.15 as officially supported once Django 6.1.3 is released.
 - Shared Redis route cache for multi-worker deployments (Django's built-in RedisCache backend, a settings change only). With LocMem each worker has its own cache.
 - A station-data version marker, checked at most once every N seconds, if station data ever needs to change while the server runs (today a restart is required).

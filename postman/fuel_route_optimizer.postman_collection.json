@@ -1,0 +1,419 @@
+{
+  "info": {
+    "name": "Fuel Route Optimizer",
+    "description": "Route-plan API requests for the demo. Run `python manage.py runserver` first; base_url defaults to http://localhost:8000.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Dallas, TX -> Chicago, IL",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/route-plan/",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "route-plan",
+            ""
+          ]
+        },
+        "description": "The cheapest plan (default). First request: meta.routing_calls = 1.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"start\": \"Dallas, TX\",\n  \"finish\": \"Chicago, IL\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "2. Same again (cached route)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/route-plan/",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "route-plan",
+            ""
+          ]
+        },
+        "description": "Repeat of request 1: meta.routing_calls = 0, meta.cached = true, identical plan.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"start\": \"Dallas, TX\",\n  \"finish\": \"Chicago, IL\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "3. Minimum saving per stop = 5",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/route-plan/",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "route-plan",
+            ""
+          ]
+        },
+        "description": "Drops the stops that save less than $5: on Dallas -> Chicago it drops the 7¢ and 10¢ stops for 17¢ more (4 stops -> 2). See summary.stops_dropped and summary.extra_cost_vs_cheapest_usd.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"start\": \"Dallas, TX\",\n  \"finish\": \"Chicago, IL\",\n  \"min_saving_per_stop_usd\": 5\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "4. Coordinates",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/route-plan/",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "route-plan",
+            ""
+          ]
+        },
+        "description": "Coordinates instead of names; name is the nearest place.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"start\": {\n    \"lat\": 32.78,\n    \"lng\": -96.8\n  },\n  \"finish\": {\n    \"lat\": 41.88,\n    \"lng\": -87.63\n  }\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "5. New York, NY -> Los Angeles, CA",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/route-plan/",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "route-plan",
+            ""
+          ]
+        },
+        "description": "A long route: 16 stops in the cheapest plan.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"start\": \"New York, NY\",\n  \"finish\": \"Los Angeles, CA\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "6. New York -> Los Angeles, min saving 5",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/route-plan/",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "route-plan",
+            ""
+          ]
+        },
+        "description": "16 stops -> 6 stops for $7.12 more.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"start\": \"New York, NY\",\n  \"finish\": \"Los Angeles, CA\",\n  \"min_saving_per_stop_usd\": 5\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "7. Reserve of 5 gallons",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/route-plan/",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "route-plan",
+            ""
+          ]
+        },
+        "description": "The tank never drops below 5 gallons: no leg longer than 450 miles.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"start\": \"Dallas, TX\",\n  \"finish\": \"Chicago, IL\",\n  \"reserve_gallons\": 5\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "8. GET form",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/v1/route-plan/?start=Dallas, TX&finish=Chicago, IL",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "route-plan",
+            ""
+          ],
+          "query": [
+            {
+              "key": "start",
+              "value": "Dallas, TX"
+            },
+            {
+              "key": "finish",
+              "value": "Chicago, IL"
+            }
+          ]
+        },
+        "description": "Same response as request 1, from query parameters."
+      }
+    },
+    {
+      "name": "9. Error: full state name (400)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/route-plan/",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "route-plan",
+            ""
+          ]
+        },
+        "description": "400 location_not_found: use a 2-letter state code.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"start\": \"Dallas, Texas\",\n  \"finish\": \"Chicago, IL\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "10. Error: outside the USA (400)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/route-plan/",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "route-plan",
+            ""
+          ]
+        },
+        "description": "400 location_outside_us (Mexico City).",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"start\": {\n    \"lat\": 19.43,\n    \"lng\": -99.13\n  },\n  \"finish\": \"Chicago, IL\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "11. Error: start fuel too low (422)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/route-plan/",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "route-plan",
+            ""
+          ]
+        },
+        "description": "422 infeasible_route: start fuel insufficient, with the gap and the gallons short.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"start\": {\n    \"lat\": 32.9,\n    \"lng\": -97.04\n  },\n  \"finish\": \"Chicago, IL\",\n  \"start_fuel_gallons\": 0\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "12. Error: start fuel above the tank (400)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/route-plan/",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "route-plan",
+            ""
+          ]
+        },
+        "description": "400 invalid_input, details.field = start_fuel_gallons.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"start\": \"Dallas, TX\",\n  \"finish\": \"Chicago, IL\",\n  \"start_fuel_gallons\": 60\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

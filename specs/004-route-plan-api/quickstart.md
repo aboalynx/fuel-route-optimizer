@@ -23,13 +23,13 @@ curl -s -X POST localhost:8000/api/v1/route-plan/ -H 'Content-Type: application/
   -d '{"start": "Dallas, TX", "finish": "Chicago, IL"}' | python -m json.tool | head -40
 ```
 
-Expected: 200; `meta.routing_calls` 1, `cached` false; about 966 miles; 4 stops, $134.64 (the
-cheapest plan, as measured in Feature 003). Repeat it: `routing_calls` 0, `cached` true, identical
+Expected: 200; `meta.routing_calls` 1, `cached` false; about 966 miles; 4 stops, $134.59 (the
+cheapest plan from the Dallas city centre). Repeat it: `routing_calls` 0, `cached` true, identical
 `fuel_stops` and `summary`.
 
 ## 4. Minimum saving per stop
 
-Same request with `"min_saving_per_stop_usd": 5`. Expected: 2 stops, $134.81,
+Same request with `"min_saving_per_stop_usd": 5`. Expected: 2 stops, $134.76,
 `stops_dropped` 2, `extra_cost_vs_cheapest_usd` 0.17, `routing_calls` 0 (cached route).
 
 ## 5. Errors
@@ -40,7 +40,7 @@ Same request with `"min_saving_per_stop_usd": 5`. Expected: 2 stops, $134.81,
 | `{"start": {"lat": 19.43, "lng": -99.13}, "finish": "Chicago, IL"}` | 400 `location_outside_us` |
 | `{"start": "Dallas, TX", "finish": "dallas, tx"}` | 400 `same_location` |
 | `{"start": "Dallas, TX", "finish": "Chicago, IL", "start_fuel_gallons": 60}` | 400 `invalid_input` |
-| `{"start": "Dallas, TX", "finish": "Chicago, IL", "start_fuel_gallons": 0}` | 422 `infeasible_route`, start fuel insufficient |
+| `{"start": {"lat": 32.90, "lng": -97.04}, "finish": "Chicago, IL", "start_fuel_gallons": 0}` | 422 `infeasible_route`, start fuel insufficient. (From `"Dallas, TX"` an empty tank is feasible: Dallas stations share the city-centre point, so there is a station at mile 0.) |
 
 ## 6. Map page
 

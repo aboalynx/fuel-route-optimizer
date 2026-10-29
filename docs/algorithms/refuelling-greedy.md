@@ -56,6 +56,35 @@ short):
 - Infeasible details: `InfeasibleRoute` carries the reason (`station gap` or `start fuel insufficient`), the gap start and end miles and the usable range; for start fuel it also carries the start fuel and the gallons short.
 - Complexity: `O(n·w)` with `w` = stations within 500 mi. Measured: 0.8 ms on the 202 real Dallas → Chicago candidates, 1.2 ms on 400 stations over 3,000 miles (2018 MacBook Pro).
 
+## Fewer stops (optional, Feature 004)
+
+`planner/fewer_stops.py` · request field `min_saving_per_stop_usd` (0–100, default 0 = off).
+
+The greedy minimises fuel cost only, so it can stop for 1.3 gallons to save 10 cents. With a
+threshold `X > 0`:
+
+```text
+plan = cheapest = plan_refuelling(all stations)
+repeat:
+    for each stop s of plan:
+        alt_s = plan_refuelling(stops of plan without s)      # skip s if infeasible: it is needed
+    s* = argmin (alt_s.total - plan.total, mile, opis_id)     # cheapest stop to drop
+    if no s* or saving(s*) >= X: stop
+    plan = alt_s*
+```
+
+- **Only the plan's own stops.** The first prototype re-planned over *all* candidates minus the
+  dropped station. On Dallas → Chicago that cascaded: near-identical neighbours replaced each
+  other one after another, and at X = $5 it removed 190 stations for +$34.98. Restricting the
+  search to the current stops removes a real stop each round: +$0.17 for 2 fewer stops, 1.2 ms.
+- **Guarantee:** every remaining stop either saves at least `X` (re-planning without it over the
+  other stops costs at least `X` more) or cannot be removed. `X = 0` returns the 003 optimum, which
+  the oracle checks.
+- **Limit:** fewer stops, not always the fewest. A plan with fewer stops using other stations can
+  exist; finding it exactly needs a search over stations and fuel levels (future work).
+- **Measured:** Dallas → Chicago 4 → 2 stops (+$0.17); New York → Los Angeles 16 → 6 stops
+  (+$7.12), with X = $5.
+
 ## Rejected alternatives
 
 DP over discretised fuel (same answer, more code; kept as the **test oracle**, ~50 seeded cases),
