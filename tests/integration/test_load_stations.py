@@ -21,7 +21,7 @@ def assert_shipped_shape():
     assert not stations.filter(state__in=CANADIAN_CODES).exists()
     for station in stations:
         assert station.lat is not None and station.lng is not None
-        assert station.geo_source == GeoSource.CITY_CENTROID
+        assert station.geo_source in {GeoSource.CITY_CENTROID, GeoSource.MANUAL}
         assert station.match_score is None
     assert not FuelPrice.objects.filter(station__isnull=True).exists()
 

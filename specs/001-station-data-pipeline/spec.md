@@ -107,7 +107,7 @@ cities.
 - **Duplicate place names.** When several places in one state share a normalised name, the most populous one wins, and the lowest gazetteer ID breaks remaining ties.
 - **Defunct places.** Historical, abandoned or destroyed places in the gazetteer are never used.
 - **Alternate names.** An alternate place name is used only when no primary name matches, to avoid false matches.
-- **Wrong alternate-name matches.** `Willington, CT` matches `Millington` (about 28 miles away) through an alternate name. The rejected-matches list (FR-022) turns it into an unmatched station with an explicit reason.
+- **Wrong alternate-name matches.** `Willington, CT` matches `Millington` (about 28 miles away) through an alternate name, and GeoNames has no populated place for Willington. The two Willington stations get reviewed manual coordinates from OpenStreetMap (FR-023), which win over the wrong match. The rejected-matches list (FR-022) stays available for future bad matches.
 - **Spacing and punctuation differences.** "De Forest" vs GeoNames "DeForest", "Brookpark" vs "Brook Park" and "Bois D Arc" vs "Bois D'Arc" are matched by the compact tier, only when the main and alternate names both fail.
 - **Exact duplicate rows.** 81 IDs have rows with the same price. They become one station, and every raw row is kept.
 - **Malformed price file.** A malformed row (bad ID, bad or non-positive price, empty city/state, unknown state code) or a missing header column stops the rebuild before anything is written, with every problem listed (see FR-020).
@@ -128,7 +128,7 @@ cities.
 - **FR-008**: The system MUST give each station the coordinates of its city centre, found by matching (city, state) against an offline gazetteer of US populated places.
 - **FR-009**: The system MUST apply one name-normalisation rule to both gazetteer names and price-file cities: lower case; remove periods and apostrophes; hyphens to spaces; collapse spaces; expand st→saint, ste→sainte, ft→fort, mt→mount; join "mc x" into "mcx". For the third lookup tier (FR-010) it MUST also derive a **compact key**: the normalised name with a leading direction token expanded (n→north, s→south, e→east, w→west), then with all spaces removed (e.g. "De Forest" → "deforest", "Bois D'Arc" and "Bois D Arc" → "boisdarc", "S Coffeyville" → "southcoffeyville").
 - **FR-010**: The system MUST ignore historical, abandoned and destroyed places. It MUST resolve name collisions within a state by highest population, then lowest gazetteer ID. Lookup MUST use three tiers, in this order, each within the same state: (1) main names; (2) alternate names, only when no main name matches; (3) the compact key against main names only (same tie rule), only when tiers 1 and 2 both fail. A later tier never overrides an earlier match. The tier used is recorded per station (main, alternate or compact).
-- **FR-011**: The system MUST record the coordinate source of every station as "city centre", and leave the match score empty (reserved for the later precision feature).
+- **FR-011**: The system MUST record the coordinate source of every station: "city centre" for a gazetteer match, or "manual" for a reviewed manual override (FR-023). The match score stays empty (reserved for the later precision feature).
 - **FR-012**: The system MUST exclude stations whose city cannot be located, together with their price rows, and MUST write them (ID, name, city, state, reason) to a reviewable unmatched-cities file, ordered by station ID. The reason is "not found" or "rejected match: <matched name>" (FR-022). That file is committed with the shipped data, so reviewers can see every dropped station.
 - **FR-013**: The system MUST replace previously built data on every rebuild rather than adding to it. Two consecutive rebuilds on the same inputs MUST produce identical stored records, including record identifiers. All three output files MUST be byte-for-byte identical between runs: the station data file, the unmatched-cities file and the place lookup.
 - **FR-014**: The system MUST write each output in a fixed order:
@@ -151,7 +151,7 @@ cities.
   - price rows stored (after excluding unlocated stations);
   - stations kept;
   - stations with several prices;
-  - stations located (count and percentage, by coordinate source), with the threshold next to the share (e.g. "Stations located 96.8% (threshold 95%)");
+  - stations located (count and percentage), with the threshold next to the share (e.g. "Stations located 96.8% (threshold 95%)"), and the count and share per coordinate source (city centre, manual, precise);
   - stations dropped, split into not found and rejected match (with the unmatched-file location);
   - the place lookup's size (places and megabytes).
 - **FR-019**: The rebuild MUST NOT make any network request.
@@ -171,15 +171,21 @@ cities.
   - **At or above the threshold:** save and export as normal.
   - **Lower threshold:** if the shipped data is built with a threshold below the default, the project documentation MUST state the value used and the reason.
 - **FR-022**: The system MUST apply a committed, reviewed rejected-matches list (`data/overrides/rejected_matches.csv`; columns city, state, matched_name, reason).
-  - **Why:** Willington, CT (stations 52623, 71659) matched Millington through an alternate name, about 28 miles from the real town; a wrong location is worse than a missing one.
+  - **Why:** a wrong location is worse than a missing one. (Willington, CT, the first case found, is now handled by a manual override, FR-023, so the shipped list may hold only its header.)
   - **Rule:** after lookup, a station whose (normalised city, state, normalised matched place name) is on the list is treated as unmatched, with reason "rejected match: <matched name>".
   - **Rejects only:** the list never supplies coordinates.
   - **Missing file:** no rejections.
-  - **Validation:** the list is validated before anything is written: exact header; non-empty city, matched name and reason; a US state code; no duplicate rows. Any problem stops the rebuild with one error that lists them all (as in FR-020).
+  - **Validation:** the list is validated before anything is written: exact header; non-empty city, matched name and reason; a US state code; no duplicate rows. Any problem stops the rebuild with one error that lists them all (as in FR-020). A header-only file is valid.
+- **FR-023**: The system MUST apply a committed, reviewed manual-coordinates list (`data/overrides/manual_coordinates.csv`; columns opis_id, lat, lng, source, note).
+  - **Why:** Willington, CT (stations 52623, 71659) matched Millington through an alternate name, about 28 miles away. GeoNames has no populated place for Willington. OpenStreetMap shows both stations at I-84 Exit 71 (Ruby Rd).
+  - **Rule:** after lookup, an override wins over any gazetteer match (or a missing match, or a rejected match) for that station ID. The station is located with the file's coordinates, stored exactly as written, and coordinate source "manual".
+  - **Not in the place lookup:** manual stations add no place-lookup rows, so a wrong gazetteer match never leaks into "City, ST" resolution.
+  - **Missing file:** no overrides.
+  - **Validation:** the list is validated before anything is written, and every problem is reported with its line number. Problems are: a wrong header; an opis_id that is not an integer, is not a US station in the price file, or appears twice; lat/lng that is not a number or is outside the contiguous-US box (lat 24 to 50, lng -125 to -66); a source that is not an openstreetmap.org URL.
 
 ### Key Entities
 
-- **Fuel station**: one physical truck stop, identified by its OPIS Truckstop ID. Attributes: display name, address, city, state, effective price (minimum of its rows), coordinates, coordinate source ("city centre" now, "precise" in a later feature), match score (empty for now).
+- **Fuel station**: one physical truck stop, identified by its OPIS Truckstop ID. Attributes: display name, address, city, state, effective price (minimum of its rows), coordinates, coordinate source ("city centre", "manual" for a reviewed override, "precise" in a later feature), match score (empty for now).
 - **Price row**: one raw row from the price file for a US station. Attributes: rack ID, name as written in that row, price exactly as written. Each price row belongs to exactly one station; a station has one or more price rows.
 - **Place**: a US populated place from the gazetteer. Attributes: normalised name, display name, state, coordinates, population. Used to locate stations and, later, to resolve user input.
 - **Rebuild report**: the summary printed at the end of a rebuild (see FR-018). It is not stored, but its numbers are copied into the project documentation.

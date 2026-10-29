@@ -121,6 +121,21 @@ marked *measured* come from a read-only feasibility scan of the real `data/geona
   - An override list that supplies coordinates (rejected: hand-entered coordinates are unverifiable).
   - Future work: GeoNames admin areas (class A/ADM3, towns and townships) as an extra tier before alternate names.
 
+## R12. Reviewed manual-coordinates override (FR-023), replacing the Willington rejection
+
+- **Decision:**
+  - A committed `data/overrides/manual_coordinates.csv` (opis_id, lat, lng, source, note).
+  - Applied after lookup, it wins over any gazetteer result for that ID.
+  - `geo_source = GeoSource.MANUAL`; coordinates stored exactly as written.
+  - The source must be an openstreetmap.org URL.
+  - Manual stations add no place-lookup rows.
+  - The Willington row is removed from `rejected_matches.csv`, which stays as the mechanism for future bad matches.
+- **Values:** both Willington stations use OSM node 10857848288 (Love's, I-84 Exit 71, Ruby Rd): 41.9256406, -72.2598092. The TA at the same exit is not mapped in OSM, so it uses the adjacent Love's.
+- **Rationale:** these are real truck stops on a major interstate. Dropping them loses two valid options, and the rejected-match approach only avoided a wrong point. A reviewed OSM point is verifiable, because the source URL is in the file.
+- **Guards:** the contiguous-US bounding box (lat 24 to 50, lng -125 to -66), a known station ID, no duplicates, and an OSM source. Every problem is reported with its line number, before anything is written.
+- **Licence:** OSM data is ODbL. The README must credit © OpenStreetMap contributors now, not only if Feature 005 ships.
+- **Expected:** 6,620 located (99.9%), 6 unmatched, 2 manual.
+
 ## R10. Testing approach (constitution IV)
 
 - **Unit tests (no DB):** CSV validation and grouping, `normalise_place_name`, the gazetteer index, the tie rule, the alternate-name fallback, and place-lookup bytes.

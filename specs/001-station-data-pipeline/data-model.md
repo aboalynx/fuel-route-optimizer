@@ -14,7 +14,7 @@ One physical US truck stop that was located.
 | `city` | `CharField(80)` | From the first row, trimmed, original casing |
 | `state` | `CharField(2, db_index=True)` | US state or DC code |
 | `lat`, `lng` | `FloatField(null=True)` | City-centre coordinates. Never null for stored stations in this feature |
-| `geo_source` | `CharField(20, choices=GeoSource.choices())` | `GeoSource` `StrEnum` (`stations/enums.py`): `CITY_CENTROID = "city_centroid"`, `OSM = "osm"`. Always `GeoSource.CITY_CENTROID` in 001 (FR-011) |
+| `geo_source` | `CharField(20, choices=GeoSource.choices())` | `GeoSource` `StrEnum` (`stations/enums.py`): `CITY_CENTROID = "city_centroid"`, `MANUAL = "manual"`, `OSM = "osm"`. `CITY_CENTROID` for a gazetteer match, `MANUAL` for a reviewed override (FR-023). Migration `0002` adds `manual` to the choices |
 | `match_score` | `PositiveSmallIntegerField(null=True)` | Always null in 001; reserved for Feature 005 |
 | `best_price` | `DecimalField(12, 8)` | Minimum of the station's price rows (FR-005), exact (FR-007) |
 
@@ -46,6 +46,7 @@ One raw US row of the price file, kept for traceability.
 | `Gazetteer` | `primary: dict[(norm, state), Place]`, `alternate: dict[(norm, state), Place]` | `geonames.load_gazetteer()` |
 | `LocatedStation` | `station: StationRecord`, `place: Place`, `via: MatchVia` (`PRIMARY`, `ALTERNATE`, `COMPACT`) | `build.build()` |
 | `UnmatchedStation` | `station: StationRecord`, `reason: UnmatchedReason` (`NOT_FOUND` = "not found", `REJECTED` = "rejected match"), `matched_name: str \| None`; `reason_text` = "not found" or "rejected match: <matched_name>" | `build.build()` |
+| `ManualCoordinate` | `line`, `opis_id: int`, `lat_text: str`, `lng_text: str` (stored exactly as written), `source: str` (openstreetmap.org URL), `note: str`, loaded from `data/overrides/manual_coordinates.csv` | `overrides.load_manual_coordinates()` |
 | `RejectedMatches` | set of (normalised city, state, normalised matched name), loaded from `data/overrides/rejected_matches.csv` | `overrides.load_rejected_matches()` |
 | `BuildResult` | `located: list[LocatedStation]`, `unmatched: list[UnmatchedStation]`, `canadian_rows: int`, `rows_read: int`, `places_index: list[PlaceIndexRow]` | `build.build()` |
 

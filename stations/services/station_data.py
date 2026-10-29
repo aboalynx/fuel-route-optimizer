@@ -17,7 +17,6 @@ from pathlib import Path
 from django.core.management import call_command
 from django.db import transaction
 
-from stations.enums import GeoSource
 from stations.models import FuelPrice, FuelStation
 from stations.pipeline.build import BuildResult, assign_price_ids, build, format_report
 from stations.pipeline.export import places_gz_bytes, temp_path_for, write_unmatched_csv
@@ -52,8 +51,9 @@ def rebuild_station_data(
     unmatched_out: Path,
     places_out: Path,
     rejected_matches_path: Path | None = None,
+    manual_coordinates_path: Path | None = None,
 ) -> RebuildOutcome:
-    result = build(csv_path, geonames_path, rejected_matches_path)
+    result = build(csv_path, geonames_path, rejected_matches_path, manual_coordinates_path)
 
     write_unmatched_csv(result.unmatched, unmatched_out)
     unmatched_display = _display(unmatched_out)
@@ -103,9 +103,9 @@ def _store(result: BuildResult) -> None:
             address=item.station.address,
             city=item.station.city,
             state=item.station.state,
-            lat=float(item.place.lat_text),
-            lng=float(item.place.lng_text),
-            geo_source=GeoSource.CITY_CENTROID,
+            lat=float(item.lat_text),
+            lng=float(item.lng_text),
+            geo_source=item.geo_source,
             match_score=None,
             best_price=item.station.best_price,
         )

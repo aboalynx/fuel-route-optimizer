@@ -7,6 +7,7 @@
 | `--csv PATH` | `settings.FUEL_PRICES_CSV` | Price file to read |
 | `--geonames PATH` | `settings.GEONAMES_FILE` | GeoNames `US.txt` |
 | `--min-geocoded-pct PCT` | `95` | Minimum located share, 0–100 (FR-021) |
+| `--manual-coordinates PATH` | `data/overrides/manual_coordinates.csv` | Reviewed coordinates that win over lookup (FR-023). A missing file means no overrides |
 | `--rejected-matches PATH` | `data/overrides/rejected_matches.csv` | Reviewed list of matches to reject (FR-022). A missing file means no rejections |
 | `--no-export` | off | Store in the DB but do not write the fixture or the place lookup |
 | `--skip-osm` | on (no-op) | Accepted for forward compatibility. OSM matching arrives in Feature 005 |
@@ -25,7 +26,7 @@
 ```text
 Rows read 8,151 | Canadian rows dropped 620 | US price rows read 7,531 | price rows stored N
 Stations kept 6,626 | with several prices 568
-Stations located N (P%, threshold 95%) | city_centroid 100% | osm 0%
+Stations located N (P%, threshold 95%) | city_centroid N (P%) | manual N (P%) | osm N (P%)
 Stations dropped N (not found N, rejected match N) -> data/reports/unmatched_cities.csv
 Places index N places, X.X MB
 ```
@@ -60,6 +61,17 @@ UTF-8 with `\n` line endings, ordered by `opis_id`, committed. `reason` is `not 
 ```text
 opis_id,name,city,state,reason
 ```
+
+### `data/overrides/manual_coordinates.csv` (input, committed, hand-reviewed)
+
+```text
+opis_id,lat,lng,source,note
+```
+
+Each row places one station at the given coordinates (`geo_source = manual`) and wins over the
+gazetteer. `source` must be an openstreetmap.org URL. lat/lng must be inside the contiguous US
+(lat 24 to 50, lng -125 to -66). A bad row stops the rebuild before anything is written, and the
+error gives the line number.
 
 ### `data/overrides/rejected_matches.csv` (input, committed, hand-reviewed)
 

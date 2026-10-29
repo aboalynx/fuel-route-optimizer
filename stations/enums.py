@@ -11,6 +11,7 @@ class GeoSource(StrEnum):
     """Where a station's coordinates come from."""
 
     CITY_CENTROID = "city_centroid"
+    MANUAL = "manual"  # reviewed override, data/overrides/manual_coordinates.csv
     OSM = "osm"
 
     @property
@@ -24,6 +25,7 @@ class GeoSource(StrEnum):
 
 _GEO_SOURCE_LABELS = {
     GeoSource.CITY_CENTROID: "City centroid",
+    GeoSource.MANUAL: "Manual override",
     GeoSource.OSM: "OpenStreetMap",
 }
 

@@ -414,7 +414,7 @@ missing, the command stops with a clear error naming the expected path and the d
    - Build the lookup `(normalised_name, state) → place`. Tier 3 (compact key: normalised name, leading n/s/e/w expanded, spaces removed; main names only) is used only when main and alternate names both miss. Primary keys come from `name` and `asciiname`. Alternate names are used only as a fallback lookup.
    - Tie rule when several places share a key: highest population, then lowest geonameid.
 3. **Assign coordinates:**
-   - Each station gets its city's centroid: `lat`, `lng`, `geo_source = GeoSource.CITY_CENTROID`, `match_score = null`.
+   - Each station gets its city's centroid: `lat`, `lng`, `geo_source = GeoSource.CITY_CENTROID`, `match_score = null`. A reviewed `data/overrides/manual_coordinates.csv` (OpenStreetMap coordinates) wins over the gazetteer for listed stations (`geo_source = GeoSource.MANUAL`). It is used for Willington, CT, which GeoNames does not have.
    - Unmatched stations are excluded from the tables, together with their price rows, and written to `data/reports/unmatched_cities.csv` (`opis_id, name, city, state, reason`, ordered by `opis_id`; reason `not found` or `rejected match: <name>`). A committed, reviewed `data/overrides/rejected_matches.csv` (city, state, matched_name, reason) rejects known-wrong matches. It never supplies coordinates. That file is **committed**, so reviewers see every dropped station.
 4. **Places index:**
    - Export `data/places/us_places.csv.gz` (`normalised_name, display_name, state, lat, lng, population`).
@@ -535,6 +535,7 @@ off-route distance, in milliseconds.
 - **Depends on:** 001 (station data). Phase 0.
 - **Constitution:** I (stable ordering), II, III, IV (respx mocks, no live calls), V (miles), VII, VIII (key-free default).
 - **Algorithm:** [route-corridor-search.md](algorithms/route-corridor-search.md) · [ADR-0002](adr/0002-kdtree-corridor-search.md)
+- **Spec:** [specs/002-route-candidates/spec.md](../specs/002-route-candidates/spec.md) (specified 2026-10-29)
 
 **Specify input:**
 
@@ -876,7 +877,7 @@ Tests use tests/fixtures/overpass_sample.json and respx.
   - "A purely cost-optimal plan can include two stops close together for a small saving; a minimum-saving-per-stop rule is future work.";
   - measured timings (station data load and rebuild from Feature 001; API cold/cached from Feature 004), with the machine used;
   - the `--min-geocoded-pct` used for the shipped data, and the reason, if it was below the default 95;
-  - data attribution: GeoNames (CC-BY 4.0), and OpenStreetMap contributors (ODbL) if 005 ships;
+  - data attribution: GeoNames (CC-BY 4.0) and © OpenStreetMap contributors (ODbL), required now because `data/overrides/manual_coordinates.csv` uses OSM coordinates;
   - future work: PostGIS, exact station coordinates, detour cost, live prices, truck profile; mark 3.15 as officially supported once Django 6.1.3 is released.
 - [ ] Postman collection `docs/postman_collection.json` (DL7) with five requests:
   - Dallas → Chicago;

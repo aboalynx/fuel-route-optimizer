@@ -1,0 +1,2 @@
+opis_id,lat,lng,source,note
+105,38.94000,-97.15000,https://www.openstreetmap.org/node/1,test: manual coordinates win over an alternate-name match

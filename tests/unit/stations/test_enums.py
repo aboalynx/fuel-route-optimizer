@@ -13,8 +13,10 @@ def test_geo_source_values_are_the_stored_strings():
 def test_geo_source_choices_feed_the_model_field():
     assert GeoSource.choices() == [
         ("city_centroid", "City centroid"),
+        ("manual", "Manual override"),
         ("osm", "OpenStreetMap"),
     ]
+    assert GeoSource.MANUAL == "manual"
 
 
 def test_enums_module_does_not_import_django():

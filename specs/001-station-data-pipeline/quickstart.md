@@ -14,7 +14,7 @@ time python manage.py loaddata stations       # no network needed; record the ti
 python manage.py shell -c "from stations.models import FuelStation as S; print(S.objects.count(), S.objects.filter(state__in=['ON','QC','AB']).count())"
 ```
 
-Expected: 6,618 stations, 0 Canadian, and a load time well under 1 minute.
+Expected: 6,620 stations (2 with `geo_source = manual`), 0 Canadian, and a load time well under 1 minute.
 
 ## 2. Maintainer path: rebuild (User Story 2, SC-001–SC-004, SC-006)
 
@@ -23,7 +23,7 @@ time python manage.py build_station_data      # record the time in the README
 ```
 
 Expected report: 8,151 rows read, 620 Canadian dropped, 7,531 US price rows read, 6,626 stations
-kept, 568 with several prices, 99.9% located (threshold 95%), and 8 dropped (6 not found, 2 rejected match). The
+kept, 568 with several prices, 99.9% located (threshold 95%), and 6 dropped (all not found). The
 numbers come from the research feasibility scan (R1). See [contracts/build_station_data.md](contracts/build_station_data.md)
 for the exact format.
 

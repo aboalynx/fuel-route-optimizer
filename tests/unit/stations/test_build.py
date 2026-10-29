@@ -4,7 +4,7 @@ from decimal import Decimal
 
 import pytest
 
-from stations.enums import MatchVia, UnmatchedReason
+from stations.enums import GeoSource, MatchVia, UnmatchedReason
 from stations.pipeline.build import assign_price_ids, build, format_report, place_index_rows
 from stations.pipeline.geonames import load_gazetteer, normalise_place_name
 from stations.pipeline.overrides import OverridesFileError
@@ -116,7 +116,8 @@ def test_report_uses_the_contract_labels(result):
     assert report.splitlines() == [
         "Rows read 21 | Canadian rows dropped 2 | US price rows read 19 | price rows stored 18",
         "Stations kept 15 | with several prices 3",
-        "Stations located 14 (93.3%, threshold 50%) | city_centroid 100% | osm 0%",
+        "Stations located 14 (93.3%, threshold 50%) | "
+        "city_centroid 14 (100%) | manual 0 (0%) | osm 0 (0%)",
         "Stations dropped 1 (not found 1, rejected match 0) -> data/reports/unmatched_cities.csv",
     ]
 
@@ -201,3 +202,65 @@ def test_place_index_one_row_per_key_and_main_name_wins(tmp_path):
 
 def test_build_result_carries_the_place_index(result):
     assert len(result.places_index) == 12
+
+
+# --- manual coordinates (FR-023) ------------------------------------------------------------
+
+
+@pytest.fixture
+def manual_result(fixtures_dir):
+    return build(
+        fixtures_dir / "sample_fuel.csv",
+        fixtures_dir / "sample_geonames.txt",
+        manual_coordinates_path=fixtures_dir / "sample_manual_coordinates.csv",
+    )
+
+
+def test_manual_override_wins_over_an_alternate_match(result, manual_result):
+    assert {i.station.opis_id: i for i in result.located}[105].via is MatchVia.ALTERNATE
+
+    item = {i.station.opis_id: i for i in manual_result.located}[105]
+    assert item.geo_source is GeoSource.MANUAL
+    assert (item.lat_text, item.lng_text) == ("38.94000", "-97.15000")
+    assert item.place is None  # no gazetteer place: nothing leaks into the place lookup
+
+
+def test_manual_override_does_not_touch_other_stations(result, manual_result):
+    def coords(r):
+        return {i.station.opis_id: (i.lat_text, i.lng_text, i.geo_source) for i in r.located}
+
+    before, after = coords(result), coords(manual_result)
+    assert {k: v for k, v in after.items() if k != 105} == {
+        k: v for k, v in before.items() if k != 105
+    }
+    assert manual_result.located_count == result.located_count
+
+
+def test_manual_station_adds_no_place_lookup_row(manual_result):
+    keys = {(r.state, r.normalised_name) for r in manual_result.places_index}
+    assert ("KS", "hometown") not in keys  # the alternate-name row came from station 105's match
+
+
+def test_report_shows_share_by_source(manual_result):
+    report = format_report(manual_result, Decimal("50"), "x.csv")
+
+    assert "| city_centroid 13 (92.86%) | manual 1 (7.14%) | osm 0 (0%)" in report
+
+
+def test_missing_manual_file_means_no_change(result, fixtures_dir, tmp_path):
+    missing = build(
+        fixtures_dir / "sample_fuel.csv",
+        fixtures_dir / "sample_geonames.txt",
+        manual_coordinates_path=tmp_path / "none.csv",
+    )
+    assert missing == result
+
+
+def test_invalid_manual_file_fails_before_lookup(fixtures_dir, tmp_path):
+    bad = tmp_path / "manual.csv"
+    bad.write_text(
+        "opis_id,lat,lng,source,note\n999,41,-72,https://www.openstreetmap.org/node/1,x\n"
+    )
+
+    with pytest.raises(OverridesFileError, match="line 2, opis_id"):
+        build(fixtures_dir / "sample_fuel.csv", tmp_path / "no_gazetteer.txt", None, bad)

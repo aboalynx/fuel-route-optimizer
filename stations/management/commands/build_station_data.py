@@ -16,6 +16,7 @@ DEFAULT_FIXTURE = Path(settings.BASE_DIR) / "stations" / "fixtures" / "stations.
 DEFAULT_UNMATCHED = Path(settings.BASE_DIR) / "data" / "reports" / "unmatched_cities.csv"
 DEFAULT_PLACES = Path(settings.BASE_DIR) / "data" / "places" / "us_places.csv.gz"
 DEFAULT_REJECTED = Path(settings.BASE_DIR) / "data" / "overrides" / "rejected_matches.csv"
+DEFAULT_MANUAL = Path(settings.BASE_DIR) / "data" / "overrides" / "manual_coordinates.csv"
 
 
 class Command(BaseCommand):
@@ -31,6 +32,12 @@ class Command(BaseCommand):
             "--min-geocoded-pct",
             default="95",
             help="Minimum share of stations that must be located, 0-100 (default 95).",
+        )
+        parser.add_argument(
+            "--manual-coordinates",
+            type=Path,
+            default=DEFAULT_MANUAL,
+            help="Reviewed coordinates that win over lookup (default data/overrides/...).",
         )
         parser.add_argument(
             "--rejected-matches",
@@ -71,6 +78,7 @@ class Command(BaseCommand):
                 unmatched_out=Path(options["unmatched_out"]),
                 places_out=Path(options["places_out"]),
                 rejected_matches_path=Path(options["rejected_matches"]),
+                manual_coordinates_path=Path(options["manual_coordinates"]),
             )
         except (PriceFileError, OverridesFileError, GazetteerMissing) as error:
             raise CommandError(str(error)) from error

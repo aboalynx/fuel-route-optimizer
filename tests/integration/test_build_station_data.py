@@ -27,6 +27,7 @@ def run(fixtures_dir, out_dirs):
             "unmatched_out": out_dirs.unmatched,
             "places_out": out_dirs.places,
             "rejected_matches": out_dirs.fixture.parent / "no_rejections.csv",
+            "manual_coordinates": out_dirs.fixture.parent / "no_overrides.csv",
             "stdout": StringIO(),
         } | overrides
         call_command("build_station_data", **options)
@@ -246,6 +247,38 @@ def test_malformed_rejected_matches_file_changes_nothing(run, out_dirs, tmp_path
 
     with pytest.raises(CommandError, match="line 2, state, 'ZZ': unknown state code"):
         run(rejected_matches=bad)
+
+    after = snapshot(out_dirs) + (out_dirs.unmatched.read_bytes(), out_dirs.places.read_bytes())
+    assert after == before
+
+
+# --- manual coordinates (FR-023) ------------------------------------------------------------
+
+
+def test_manual_override_is_stored_as_manual(run, fixtures_dir):
+    stdout = run(manual_coordinates=fixtures_dir / "sample_manual_coordinates.csv")
+
+    station = FuelStation.objects.get(pk=105)
+    assert (station.geo_source, station.lat, station.lng) == (GeoSource.MANUAL, 38.94, -97.15)
+    assert "manual 1 (7.14%)" in stdout
+
+
+@pytest.mark.parametrize(
+    "row",
+    [
+        "999999,38.9,-97.1,https://www.openstreetmap.org/node/1,unknown id",
+        "105,60.0,-97.1,https://www.openstreetmap.org/node/1,outside the box",
+        "105,38.9,-97.1,https://example.com/x,not osm",
+    ],
+)
+def test_invalid_manual_file_changes_nothing(run, out_dirs, tmp_path, row):
+    run()
+    before = snapshot(out_dirs) + (out_dirs.unmatched.read_bytes(), out_dirs.places.read_bytes())
+    bad = tmp_path / "bad_manual.csv"
+    bad.write_text(f"opis_id,lat,lng,source,note\n{row}\n", encoding="utf-8")
+
+    with pytest.raises(CommandError, match="line 2"):
+        run(manual_coordinates=bad)
 
     after = snapshot(out_dirs) + (out_dirs.unmatched.read_bytes(), out_dirs.places.read_bytes())
     assert after == before

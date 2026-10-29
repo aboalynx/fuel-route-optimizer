@@ -19,7 +19,7 @@ A single Django management command, `build_station_data`, rebuilds the station d
 
 The algorithms live in pure modules under `stations/pipeline/`. The rebuild service `stations/services/station_data.py` runs them, stores the data and exports the files. The management command is a thin shell around that service. A
 feasibility scan of the real files measured 99.8% of stations located (13 unmatched); the compact
-third tier (research R1 update) raises this to 99.9% (6 unmatched); the reviewed rejected-matches list (R11) then drops 2 known-wrong matches, for 6,618 located and 8 unmatched. The scan also measured a
+third tier (research R1 update) raises this to 99.9% (6 unmatched); a reviewed manual override (R12) then places the 2 Willington, CT stations at I-84 Exit 71 from OpenStreetMap, for 6,620 located and 6 unmatched. The scan also measured a
 6.5 s gazetteer pass (research R1, R2).
 
 ## Technical Context
@@ -98,7 +98,7 @@ stations/
 │   ├── __init__.py
 │   ├── clean.py                    # header check, row validation, PriceRow, group_stations
 │   ├── geonames.py                 # normalise_place_name, compact_place_name, load_gazetteer, tie rule, 3-tier lookup
-│   ├── overrides.py                # load + validate the reviewed rejected-matches list (FR-022)
+│   ├── overrides.py                # load + validate the reviewed rejected-matches (FR-022) and manual-coordinates (FR-023) lists
 │   ├── build.py                    # locate stations, apply rejections, BuildResult, report numbers, place-lookup rows
 │   └── export.py                   # byte-stable writers: unmatched CSV, gzipped place lookup
 ├── services/                       # application logic (one module per service)
@@ -109,7 +109,8 @@ stations/
 └── fixtures/stations.json          # committed
 
 data/
-├── overrides/rejected_matches.csv  # committed, hand-reviewed: matches to reject (FR-022)
+├── overrides/rejected_matches.csv  # committed, hand-reviewed: matches to reject (FR-022); may be header-only
+├── overrides/manual_coordinates.csv # committed, hand-reviewed: OSM coordinates that win over lookup (FR-023)
 ├── places/us_places.csv.gz         # committed
 └── reports/unmatched_cities.csv    # committed (with a reason column)
 

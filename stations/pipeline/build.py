@@ -11,14 +11,31 @@ from pathlib import Path
 from stations.enums import GeoSource, MatchVia, UnmatchedReason
 from stations.pipeline.clean import PriceRow, StationRecord, group_stations, read_price_rows
 from stations.pipeline.geonames import Gazetteer, Place, load_gazetteer, normalise_place_name
-from stations.pipeline.overrides import load_rejected_matches
+from stations.pipeline.overrides import (
+    ManualCoordinate,
+    load_manual_coordinates,
+    load_rejected_matches,
+)
 
 
 @dataclass(frozen=True)
 class LocatedStation:
     station: StationRecord
-    place: Place
-    via: MatchVia
+    place: Place | None  # the gazetteer place; None for a manual override
+    via: MatchVia | None
+    manual: ManualCoordinate | None = None
+
+    @property
+    def geo_source(self) -> GeoSource:
+        return GeoSource.MANUAL if self.manual else GeoSource.CITY_CENTROID
+
+    @property
+    def lat_text(self) -> str:
+        return self.manual.lat_text if self.manual else self.place.lat_text
+
+    @property
+    def lng_text(self) -> str:
+        return self.manual.lng_text if self.manual else self.place.lng_text
 
 
 @dataclass(frozen=True)
@@ -99,19 +116,29 @@ class BuildResult:
 
 
 def build(
-    csv_path: Path, geonames_path: Path, rejected_matches_path: Path | None = None
+    csv_path: Path,
+    geonames_path: Path,
+    rejected_matches_path: Path | None = None,
+    manual_coordinates_path: Path | None = None,
 ) -> BuildResult:
     """Validate the inputs, group the price file by station and locate each station.
 
+    A reviewed manual override wins over any gazetteer result for its station.
     Raises PriceFileError, OverridesFileError or GazetteerMissing before any work is done.
     """
     price_file = read_price_rows(csv_path)
     rejected = load_rejected_matches(rejected_matches_path)
+    manual = load_manual_coordinates(
+        manual_coordinates_path, known_ids={row.opis_id for row in price_file.rows}
+    )
     gazetteer = load_gazetteer(geonames_path)
 
     located: list[LocatedStation] = []
     unmatched: list[UnmatchedStation] = []
     for station in group_stations(price_file.rows):
+        if station.opis_id in manual:
+            located.append(LocatedStation(station, None, None, manual[station.opis_id]))
+            continue
         match = gazetteer.lookup(station.city, station.state)
         if match is None:
             unmatched.append(UnmatchedStation(station, UnmatchedReason.NOT_FOUND))
@@ -140,7 +167,7 @@ def place_index_rows(gazetteer: Gazetteer, located: list[LocatedStation]) -> lis
     - a row under the station's normalised city key for a place matched through the alternate
       or compact tier, only when no main name already uses the key (a main name always wins).
     """
-    matched_ids = {item.place.geonameid for item in located}
+    matched_ids = {item.place.geonameid for item in located if item.place is not None}
     rows: dict[tuple[str, str], PlaceIndexRow] = {}
 
     for (name, state), place in gazetteer.primary.items():
@@ -148,7 +175,7 @@ def place_index_rows(gazetteer: Gazetteer, located: list[LocatedStation]) -> lis
             rows[(state, name)] = _index_row(name, place)
 
     for item in located:
-        if item.via is not MatchVia.PRIMARY:
+        if item.place is not None and item.via is not MatchVia.PRIMARY:
             name = normalise_place_name(item.station.city)
             key = (item.station.state, name)
             if (name, item.station.state) not in gazetteer.primary:
@@ -184,9 +211,11 @@ def format_report(
     places_info: tuple[int, float] | None = None,
 ) -> str:
     """The rebuild report, with the exact labels of contracts/build_station_data.md."""
-    by_source = {GeoSource.CITY_CENTROID: result.located_count, GeoSource.OSM: 0}
+    by_source = {source: 0 for source in GeoSource}
+    for item in result.located:
+        by_source[item.geo_source] += 1
     source_shares = " | ".join(
-        f"{source} {_pct(Fraction(count * 100, result.located_count or 1))}"
+        f"{source} {count:,} ({_share(Fraction(count * 100, result.located_count or 1))})"
         for source, count in by_source.items()
     )
     lines = [
@@ -204,6 +233,12 @@ def format_report(
         count, megabytes = places_info
         lines.append(f"Places index {count:,} places, {megabytes:.1f} MB")
     return "\n".join(lines)
+
+
+def _share(value: Fraction) -> str:
+    """Two decimal places without trailing zeros (e.g. '99.97%', '7.14%', '100%', '0%')."""
+    text = f"{float(value):.2f}".rstrip("0").rstrip(".")
+    return f"{text}%"
 
 
 def _pct(value: Fraction) -> str:
