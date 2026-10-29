@@ -9,13 +9,14 @@ from routing.base import LatLng, Route, RoutingProvider
 KEY_VERSION = "v1"
 
 
+def rounded(point: LatLng) -> tuple[float, float]:
+    """The point rounded to 4 decimal places (~11 m); -0.0 becomes 0.0."""
+    return round(point.lat, 4) + 0.0, round(point.lng, 4) + 0.0
+
+
 def cache_key(provider_name: str, start: LatLng, finish: LatLng) -> str:
-    """Coordinates rounded to 4 decimal places (~11 m); -0.0 and 0.0 share a key."""
-
-    def point(p: LatLng) -> str:
-        return f"{round(p.lat, 4) + 0.0:.4f},{round(p.lng, 4) + 0.0:.4f}"
-
-    return f"route:{KEY_VERSION}:{provider_name}:{point(start)};{point(finish)}"
+    (a, b), (c, d) = rounded(start), rounded(finish)
+    return f"route:{KEY_VERSION}:{provider_name}:{a:.4f},{b:.4f};{c:.4f},{d:.4f}"
 
 
 class CachedRoutingProvider:

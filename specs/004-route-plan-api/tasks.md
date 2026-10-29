@@ -136,7 +136,7 @@ description: "Task list for Feature 004: Route Plan API"
 
 ### Tests for User Story 3 ⚠️
 
-- [ ] T021 [US3] Write `tests/integration/api/test_errors.py`, one test per row (status, `error.code`, message substring, `details` keys):
+- [X] T021 [US3] Write `tests/integration/api/test_errors.py`, one test per row (status, `error.code`, message substring, `details` keys):
   - malformed JSON body; missing `finish`; `{"lat": 200, "lng": 0}`; unknown field → 400 `invalid_input` naming the field;
   - `corridor_miles: 0.5` and `26`; `reserve_gallons: 26`; `min_saving_per_stop_usd: 101` → 400 `invalid_input` (serializer ranges);
   - `"Dallas, Texas"` as `start` → 400 `location_not_found`, message contains `2-letter state code`, `details.field == "start"`; `"Atlantis, TX"` as `finish` → 400 `location_not_found`, `details.field == "finish"`;
@@ -152,8 +152,8 @@ description: "Task list for Feature 004: Route Plan API"
 
 ### Implementation for User Story 3
 
-- [ ] T022 [US3] In `api/services/route_plan.py`, add `SameLocation` and both checks (research R4): rounded coordinates equal → raise before routing; `route.distance_miles < 0.01` or `cumulative_miles(points)[-1] < 0.01` → raise before `find_candidates`. Catch `InfeasibleRoute` to attach `gap_start`/`gap_end` coordinates via `point_at_mile` (re-raise inside a small `InfeasibleRouteAt` wrapper or return them on the result of the exception; keep the optimizer unchanged).
-- [ ] T023 [US3] In `api/views.py`, complete the error table (research R8): `LocationNotFound`, `LocationOutsideUS`, `SameLocation` → 400; `InfeasibleRoute` → 422 with the details listed in the contract (Decimal values as numbers); `RoutingUnavailable` → 503 with `Retry-After` (`exc.retry_after_seconds` or `settings.ROUTING_RETRY_AFTER_SECONDS`); `StationDataMissing` → 503 `station_data_missing`; `PlaceDataMissing` → 503 `place_data_missing`; `details.field` for the location errors and `InvalidPlanInput`; the catch-all from T016 stays last (500 `internal_error`). Run T021 green.
+- [X] T022 [US3] In `api/services/route_plan.py`, add `SameLocation` and both checks (research R4): rounded coordinates equal → raise before routing; `route.distance_miles < 0.01` or `cumulative_miles(points)[-1] < 0.01` → raise before `find_candidates`. Catch `InfeasibleRoute` to attach `gap_start`/`gap_end` coordinates via `point_at_mile` (re-raise inside a small `InfeasibleRouteAt` wrapper or return them on the result of the exception; keep the optimizer unchanged).
+- [X] T023 [US3] In `api/views.py`, complete the error table (research R8): `LocationNotFound`, `LocationOutsideUS`, `SameLocation` → 400; `InfeasibleRoute` → 422 with the details listed in the contract (Decimal values as numbers); `RoutingUnavailable` → 503 with `Retry-After` (`exc.retry_after_seconds` or `settings.ROUTING_RETRY_AFTER_SECONDS`); `StationDataMissing` → 503 `station_data_missing`; `PlaceDataMissing` → 503 `place_data_missing`; `details.field` for the location errors and `InvalidPlanInput`; the catch-all from T016 stays last (500 `internal_error`). Run T021 green.
 
 **Checkpoint**: every failure is a documented JSON error; the only 500 in the tests is the deliberate internal-error case.
 

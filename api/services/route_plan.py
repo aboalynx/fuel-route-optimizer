@@ -15,6 +15,7 @@ from django.core.cache import cache
 from api.services.places import get_place_index
 from planner.corridor import Candidate, find_candidates
 from planner.fewer_stops import FewerStopsResult
+from planner.geometry import cumulative_miles
 from planner.locations import (
     LocationError,
     PlaceIndex,
@@ -22,14 +23,16 @@ from planner.locations import (
     resolve_name,
     resolve_point,
 )
-from planner.optimizer import FuelPurchase, PlanStation, plan_refuelling
+from planner.optimizer import FuelPurchase, InfeasibleRoute, PlanStation, plan_refuelling
+from planner.route_output import point_at_mile
 from planner.station_index import StationIndex, StationInfo
 from routing.base import LatLng, Route
-from routing.cached import CachedRoutingProvider
+from routing.cached import CachedRoutingProvider, rounded
 from routing.factory import provider_from_settings
 from stations.services.index_loader import get_station_index
 
 MILE = Decimal("0.001")
+MIN_ROUTE_MILES = 0.01  # shorter than this is the same location (FR-016)
 
 Location = str | tuple[float, float]
 
@@ -41,6 +44,25 @@ class InvalidPlanInput(Exception):
         self.field = field
         self.message = message
         super().__init__(message)
+
+
+class SameLocation(Exception):
+    """Start and finish are the same point (rounded) or the route is shorter than 0.01 mi."""
+
+    def __init__(self, start: str, finish: str):
+        self.start = start
+        self.finish = finish
+        super().__init__(f"start '{start}' and finish '{finish}' are the same location")
+
+
+class InfeasibleRouteAt(Exception):
+    """An InfeasibleRoute plus the coordinates of the gap's ends on the route."""
+
+    def __init__(self, error: InfeasibleRoute, gap_start: LatLng, gap_end: LatLng):
+        self.error = error
+        self.gap_start = gap_start
+        self.gap_end = gap_end
+        super().__init__(str(error))
 
 
 @dataclass(frozen=True)
@@ -102,13 +124,18 @@ def plan_route(inp: RoutePlanInput, *, provider=None) -> RoutePlanResult:
     finish = _resolve(places, inp.finish, "finish")
     vehicle = vehicle_from_settings()
     start_fuel = _check_vehicle_inputs(inp, vehicle)
+    start_point, finish_point = LatLng(start.lat, start.lng), LatLng(finish.lat, finish.lng)
+    if rounded(start_point) == rounded(finish_point):  # the route-cache rounding
+        raise SameLocation(start.query, finish.query)
     timer.lap("resolve")
 
     routes = CachedRoutingProvider(
         provider or provider_from_settings(), cache, settings.ROUTE_CACHE_TTL_SECONDS
     )
-    route, cached = routes.route(LatLng(start.lat, start.lng), LatLng(finish.lat, finish.lng))
+    route, cached = routes.route(start_point, finish_point)
     routing_calls = 0 if cached else 1
+    if route.distance_miles < MIN_ROUTE_MILES or _geometry_miles(route) < MIN_ROUTE_MILES:
+        raise SameLocation(start.query, finish.query)  # also keeps rescaling off zero
     timer.lap("routing")
 
     index = get_station_index()
@@ -117,14 +144,21 @@ def plan_route(inp: RoutePlanInput, *, provider=None) -> RoutePlanResult:
     stations = to_plan_stations(candidates, distance)
     timer.lap("candidates")
 
-    plan = plan_refuelling(
-        distance,
-        stations,
-        mpg=vehicle.mpg,
-        max_range_miles=vehicle.max_range_miles,
-        start_fuel_gallons=start_fuel,
-        reserve_gallons=inp.reserve_gallons,
-    )
+    try:
+        plan = plan_refuelling(
+            distance,
+            stations,
+            mpg=vehicle.mpg,
+            max_range_miles=vehicle.max_range_miles,
+            start_fuel_gallons=start_fuel,
+            reserve_gallons=inp.reserve_gallons,
+        )
+    except InfeasibleRoute as error:
+        raise InfeasibleRouteAt(
+            error,
+            point_at_mile(route, float(error.gap_start_mile)),
+            point_at_mile(route, float(error.gap_end_mile)),
+        ) from error
     result = FewerStopsResult(plan=plan, cheapest=plan, stops_dropped=0)
     timer.lap("optimize")
 
@@ -209,6 +243,10 @@ def _fuel_stops(
             )
         )
     return tuple(stops)
+
+
+def _geometry_miles(route: Route) -> float:
+    return float(cumulative_miles(np.array([(p.lat, p.lng) for p in route.points]))[-1])
 
 
 def _miles(value: float) -> Decimal:
