@@ -11,6 +11,7 @@ from enum import StrEnum
 
 CENT = Decimal("0.01")
 INFINITY = Decimal("Infinity")
+MAX_RESERVE_GALLONS = Decimal(25)
 
 
 @dataclass(frozen=True)
@@ -89,11 +90,14 @@ def plan_refuelling(
     reserve_gallons: Decimal = Decimal(0),
 ) -> FuelPlan:
     """The cheapest plan, or InfeasibleRoute. Invalid input raises ValueError or TypeError."""
-    capacity_gallons = _validate(distance_miles, stations, mpg, max_range_miles, start_fuel_gallons)
+    capacity_gallons = _validate(
+        distance_miles, stations, mpg, max_range_miles, start_fuel_gallons, reserve_gallons
+    )
     if start_fuel_gallons is None:
         start_fuel_gallons = capacity_gallons
 
     # Fuel is held in miles of range, so every sum below is exact for any mpg (research R2).
+    # The reserve is never touched: the same loop runs on the fuel above it (research R7).
     # The origin is priced +inf (nothing can be bought there), the destination 0 (buy only what
     # is needed to finish).
     nodes = (
@@ -101,8 +105,8 @@ def plan_refuelling(
         + [_Node(s.mile_marker, s.price_usd_per_gallon, s.opis_id) for s in stations]
         + [_Node(distance_miles, Decimal(0), 0)]
     )
-    capacity = max_range_miles
-    fuel = start_fuel_gallons * mpg
+    capacity = max_range_miles - reserve_gallons * mpg
+    fuel = (start_fuel_gallons - reserve_gallons) * mpg
     purchases = []
     i = 0
     while i < len(nodes) - 1:
@@ -142,7 +146,7 @@ def plan_refuelling(
         gallons_consumed=distance_miles / mpg,
         gallons_purchased=sum((p.gallons for p in purchases), Decimal(0)),
         total_cost_usd=sum((p.cost_usd for p in purchases), Decimal("0.00")),
-        fuel_left_gallons=fuel / mpg,
+        fuel_left_gallons=fuel / mpg + reserve_gallons,
     )
 
 
@@ -174,7 +178,9 @@ def _next_node(nodes: list[_Node], i: int, capacity: Decimal) -> tuple[int | Non
     return best, False
 
 
-def _validate(distance_miles, stations, mpg, max_range_miles, start_fuel_gallons) -> Decimal:
+def _validate(
+    distance_miles, stations, mpg, max_range_miles, start_fuel_gallons, reserve_gallons
+) -> Decimal:
     """Check every input; return the tank capacity in gallons."""
     for name, value in [
         ("distance_miles", distance_miles),
@@ -197,6 +203,22 @@ def _validate(distance_miles, stations, mpg, max_range_miles, start_fuel_gallons
                 f"start_fuel_gallons must be between 0 and {capacity_gallons}, "
                 f"got {start_fuel_gallons}"
             )
+
+    _require_decimal("reserve_gallons", reserve_gallons)
+    if not 0 <= reserve_gallons <= MAX_RESERVE_GALLONS:
+        raise ValueError(
+            f"reserve_gallons must be between 0 and {MAX_RESERVE_GALLONS}, got {reserve_gallons}"
+        )
+    if reserve_gallons >= capacity_gallons:
+        raise ValueError(
+            f"reserve_gallons must be less than the tank capacity ({capacity_gallons} gal), "
+            f"got {reserve_gallons}"
+        )
+    if start_fuel_gallons is not None and start_fuel_gallons < reserve_gallons:
+        raise ValueError(
+            f"start_fuel_gallons ({start_fuel_gallons}) must be at least reserve_gallons "
+            f"({reserve_gallons})"
+        )
 
     previous = None
     for station in stations:

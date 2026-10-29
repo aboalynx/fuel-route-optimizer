@@ -124,7 +124,7 @@ description: "Task list for Feature 003: Refuel Optimizer"
 
 ### Tests for User Story 3 ⚠️ (write first, show failing)
 
-- [ ] T010 [P] [US3] Write `tests/unit/planner/test_reserve.py` (pure), covering:
+- [X] T010 [P] [US3] Write `tests/unit/planner/test_reserve.py` (pure), covering:
   - reserve 5 on a multi-stop route → no leg between consecutive fuel points (start, each stop, finish) is longer than 450 mi; the tank never drops below 5 gal; `fuel_left_gallons ≥ 5`; fuel balance still exact;
   - reserve 5 with stations 470 mi apart → `STATION_GAP` with `usable_range_miles == 450`, while the same input with reserve 0 is feasible;
   - start fuel 4 with reserve 5 → `ValueError` (invalid input, not infeasible);
@@ -133,7 +133,7 @@ description: "Task list for Feature 003: Refuel Optimizer"
 
 ### Implementation for User Story 3
 
-- [ ] T011 [US3] In `planner/optimizer.py`, implement the reserve per research R7: validate `0 ≤ reserve_gallons ≤ 25`, `reserve < capacity`, `reserve ≤ start_fuel_gallons`; run the same loop with usable capacity `max_range_miles − reserve × mpg` and usable start fuel `(start_fuel − reserve) × mpg`; add the reserve back to `fuel_left_gallons`; `usable_range_miles` in errors reflects the reserve. Run T010 green, and re-run all of `tests/unit/planner/`.
+- [X] T011 [US3] In `planner/optimizer.py`, implement the reserve per research R7: validate `0 ≤ reserve_gallons ≤ 25`, `reserve < capacity`, `reserve ≤ start_fuel_gallons`; run the same loop with usable capacity `max_range_miles − reserve × mpg` and usable start fuel `(start_fuel − reserve) × mpg`; add the reserve back to `fuel_left_gallons`; `usable_range_miles` in errors reflects the reserve. Run T010 green, and re-run all of `tests/unit/planner/`.
 
 **Checkpoint**: all three stories work.
 
