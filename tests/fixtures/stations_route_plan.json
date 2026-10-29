@@ -1,0 +1,77 @@
+[
+  {
+    "model": "stations.fuelstation",
+    "pk": 101,
+    "fields": {
+      "name": "TEST STATION 101",
+      "address": "ROUTE POINT 8",
+      "city": "Testville",
+      "state": "OK",
+      "lat": 33.240075,
+      "lng": -94.867395,
+      "geo_source": "city_centroid",
+      "match_score": null,
+      "best_price": "3.10000000"
+    }
+  },
+  {
+    "model": "stations.fuelstation",
+    "pk": 102,
+    "fields": {
+      "name": "TEST STATION 102",
+      "address": "ROUTE POINT 16",
+      "city": "Testville",
+      "state": "OK",
+      "lat": 34.689315,
+      "lng": -92.305548,
+      "geo_source": "city_centroid",
+      "match_score": null,
+      "best_price": "2.95000000"
+    }
+  },
+  {
+    "model": "stations.fuelstation",
+    "pk": 103,
+    "fields": {
+      "name": "TEST STATION 103",
+      "address": "ROUTE POINT 24",
+      "city": "Testville",
+      "state": "OK",
+      "lat": 36.111705,
+      "lng": -89.769206,
+      "geo_source": "city_centroid",
+      "match_score": null,
+      "best_price": "3.25000000"
+    }
+  },
+  {
+    "model": "stations.fuelstation",
+    "pk": 104,
+    "fields": {
+      "name": "TEST STATION 104",
+      "address": "ROUTE POINT 36",
+      "city": "Testville",
+      "state": "OK",
+      "lat": 39.094536,
+      "lng": -88.578932,
+      "geo_source": "city_centroid",
+      "match_score": null,
+      "best_price": "2.90000000"
+    }
+  },
+  {
+    "model": "stations.fuelstation",
+    "pk": 105,
+    "fields": {
+      "name": "TEST STATION 105",
+      "address": "30 MI EAST OF ROUTE POINT 20",
+      "city": "Testville",
+      "state": "OK",
+      "lat": 34.926435,
+      "lng": -90.595179,
+      "geo_source": "city_centroid",
+      "match_score": null,
+      "best_price": "1.00000000"
+    }
+  }
+]

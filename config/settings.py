@@ -140,7 +140,28 @@ CORRIDOR_MILES = env.float("CORRIDOR_MILES", default=10)
 ROUTING_PROVIDER = env("ROUTING_PROVIDER", default="osrm")
 OSRM_BASE_URL = env("OSRM_BASE_URL", default="https://router.project-osrm.org")
 ROUTING_TIMEOUT_SECONDS = env.float("ROUTING_TIMEOUT_SECONDS", default=8)
+ROUTING_RETRY_AFTER_SECONDS = env.int("ROUTING_RETRY_AFTER_SECONDS", default=30)
+
+# Route cache: in-process, stores the route only (constitution VII amendment)
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "routes",
+        "OPTIONS": {"MAX_ENTRIES": 500},
+    }
+}
+ROUTE_CACHE_TTL_SECONDS = env.int("ROUTE_CACHE_TTL_SECONDS", default=86400)
+
+# API
+REST_FRAMEWORK = {
+    "COERCE_DECIMAL_TO_STRING": False,
+    "DEFAULT_AUTHENTICATION_CLASSES": [],
+    "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.AllowAny"],
+    "UNAUTHENTICATED_USER": None,
+    "EXCEPTION_HANDLER": "api.exceptions.error_body_exception_handler",
+}
 
 # Data
 FUEL_PRICES_CSV = BASE_DIR / "data" / "fuel-prices-for-be-assessment.csv"
 GEONAMES_FILE = BASE_DIR / "data" / "geonames" / "US.txt"
+PLACES_INDEX_FILE = BASE_DIR / "data" / "places" / "us_places.csv.gz"

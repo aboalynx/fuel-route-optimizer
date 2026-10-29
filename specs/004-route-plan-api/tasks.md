@@ -27,16 +27,16 @@ description: "Task list for Feature 004: Route Plan API"
 
 ## Phase 1: Setup
 
-- [ ] T001 Update `config/settings.py` (and document new keys in `.env.example` as comments):
+- [X] T001 Update `config/settings.py` (and document new keys in `.env.example` as comments):
   - `REST_FRAMEWORK = {"COERCE_DECIMAL_TO_STRING": False, "DEFAULT_AUTHENTICATION_CLASSES": [], "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.AllowAny"], "UNAUTHENTICATED_USER": None}` (the `EXCEPTION_HANDLER` key is added in T008, together with its module);
   - `CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache", "LOCATION": "routes", "OPTIONS": {"MAX_ENTRIES": 500}}}`;
   - `ROUTE_CACHE_TTL_SECONDS = env.int("ROUTE_CACHE_TTL_SECONDS", default=86400)`, `ROUTING_RETRY_AFTER_SECONDS = env.int("ROUTING_RETRY_AFTER_SECONDS", default=30)`, `PLACES_INDEX_FILE = BASE_DIR / "data" / "places" / "us_places.csv.gz"`.
   - Run `python manage.py check`.
-- [ ] T002 [P] Create the empty packages `api/services/__init__.py`, `tests/unit/api/__init__.py`, `tests/integration/api/__init__.py`.
-- [ ] T003 [P] Create `tests/fixtures/stations_route_plan.json` (Django fixture of `stations.fuelstation`, same fields as `tests/fixtures/stations_sample.json`: `name`, `address`, `city`, `state`, `lat`, `lng`, `geo_source` `"city_centroid"`, `match_score` null, `best_price` as an 8-dp string). Place stations **exactly on points of** `tests/fixtures/osrm_dallas_chicago.json`'s geometry (50 `[lng, lat]` points), so they are 0 mi off the route:
+- [X] T002 [P] Create the empty packages `api/services/__init__.py`, `tests/unit/api/__init__.py`, `tests/integration/api/__init__.py`.
+- [X] T003 [P] Create `tests/fixtures/stations_route_plan.json` (Django fixture of `stations.fuelstation`, same fields as `tests/fixtures/stations_sample.json`: `name`, `address`, `city`, `state`, `lat`, `lng`, `geo_source` `"city_centroid"`, `match_score` null, `best_price` as an 8-dp string). Place stations **exactly on points of** `tests/fixtures/osrm_dallas_chicago.json`'s geometry (50 `[lng, lat]` points), so they are 0 mi off the route:
   - pk 101 at geometry index 8, price `"3.10000000"`; pk 102 at index 16, `"2.95000000"`; pk 103 at index 24, `"3.25000000"`; pk 104 at index 36, `"2.90000000"`; pk 105 at index 20 moved 30 mi east (`lng + 30 / (69.17 × cos(lat))`), `"1.00000000"` (outside the 10-mi corridor, must never be a candidate).
   - Generate the coordinates with a one-off script in the scratchpad and commit only the JSON. Note the chosen geometry indexes in the docstring of `tests/integration/api/conftest.py` (T004).
-- [ ] T004 Create `tests/integration/api/conftest.py`:
+- [X] T004 Create `tests/integration/api/conftest.py`:
   - autouse fixture: `django.core.cache.cache.clear()`, `get_station_index.cache_clear()`, `get_place_index.cache_clear()` before and after each test;
   - `route_stations` fixture: `call_command("loaddata", "tests/fixtures/stations_route_plan.json")`;
   - `osrm` fixture: a respx router mocking `GET {OSRM_BASE_URL}/route/v1/driving/...` with the recorded fixture (returns the route so tests can read `.call_count`);
@@ -49,7 +49,7 @@ description: "Task list for Feature 004: Route Plan API"
 
 **Purpose**: location resolution, the place index, the error codes and the error body, used by every story.
 
-- [ ] T005 [P] Write the failing test `tests/unit/planner/test_locations.py` (pure). Build a tiny place file in `tmp_path` with the same header as `data/places/us_places.csv.gz` (`normalised_name,display_name,state,lat,lng,population`; gzip) holding Dallas TX, Chicago IL, De Forest WI (normalised `de forest`), South Coffeyville OK. Cover:
+- [X] T005 [P] Write the failing test `tests/unit/planner/test_locations.py` (pure). Build a tiny place file in `tmp_path` with the same header as `data/places/us_places.csv.gz` (`normalised_name,display_name,state,lat,lng,population`; gzip) holding Dallas TX, Chicago IL, De Forest WI (normalised `de forest`), South Coffeyville OK. Cover:
   - `resolve_name("Dallas, TX")` and `"dallas, tx"` and `"  Dallas ,  TX "` → Dallas's coordinates, `place_name == "Dallas, TX"`;
   - `"DeForest, WI"` resolves through the compact key; `"S Coffeyville, OK"` too;
   - `"Dallas, Texas"` → `LocationNotFound` whose message contains `2-letter state code`;
@@ -61,9 +61,9 @@ description: "Task list for Feature 004: Route Plan API"
   - `load_place_index` on an empty, missing or unreadable (not gzip) file → `PlaceDataMissing` with the message "place data missing: data/places/us_places.csv.gz (restore it from git or rebuild with python manage.py build_station_data)" (the path in the message is the configured one);
   - `LocationNotFound` / `LocationOutsideUS` have `field is None` from the resolver;
   - `planner/locations.py` imports no Django (AST).
-- [ ] T006 [P] Write the failing test `tests/unit/api/test_enums.py`: `ErrorCode` values are exactly `invalid_input`, `location_not_found`, `location_outside_us`, `same_location`, `infeasible_route`, `routing_unavailable`, `station_data_missing`, `place_data_missing`, `internal_error`; `api/enums.py` imports no Django (AST).
-- [ ] T007 Implement `planner/locations.py` per research R2 and data-model.md (`Place`, `PlaceIndex`, `ResolvedLocation`, `LocationNotFound`, `LocationOutsideUS`, `PlaceDataMissing`, `load_place_index(path)`, `resolve_name(index, text)`, `resolve_point(index, lat, lng)`), reusing `stations.pipeline.geonames.normalise_place_name` / `compact_place_name` and `planner.geometry.to_unit_vectors` / `chord_for_miles`. Implement `api/enums.py` (`ErrorCode` `StrEnum`). Run T005 and T006 green.
-- [ ] T008 Implement `api/services/places.py` (`get_place_index()` with `functools.lru_cache(maxsize=1)`, reading `settings.PLACES_INDEX_FILE`; never called at import or in `AppConfig.ready()`) and `api/exceptions.py`, then add `"EXCEPTION_HANDLER": "api.exceptions.error_body_exception_handler"` to `REST_FRAMEWORK` in `config/settings.py` and run `python manage.py check`:
+- [X] T006 [P] Write the failing test `tests/unit/api/test_enums.py`: `ErrorCode` values are exactly `invalid_input`, `location_not_found`, `location_outside_us`, `same_location`, `infeasible_route`, `routing_unavailable`, `station_data_missing`, `place_data_missing`, `internal_error`; `api/enums.py` imports no Django (AST).
+- [X] T007 Implement `planner/locations.py` per research R2 and data-model.md (`Place`, `PlaceIndex`, `ResolvedLocation`, `LocationNotFound`, `LocationOutsideUS`, `PlaceDataMissing`, `load_place_index(path)`, `resolve_name(index, text)`, `resolve_point(index, lat, lng)`), reusing `stations.pipeline.geonames.normalise_place_name` / `compact_place_name` and `planner.geometry.to_unit_vectors` / `chord_for_miles`. Implement `api/enums.py` (`ErrorCode` `StrEnum`). Run T005 and T006 green.
+- [X] T008 Implement `api/services/places.py` (`get_place_index()` with `functools.lru_cache(maxsize=1)`, reading `settings.PLACES_INDEX_FILE`; never called at import or in `AppConfig.ready()`) and `api/exceptions.py`, then add `"EXCEPTION_HANDLER": "api.exceptions.error_body_exception_handler"` to `REST_FRAMEWORK` in `config/settings.py` and run `python manage.py check`:
   - `error_response(code: ErrorCode, message: str, details: dict | None, status: int, headers=None) -> Response` building `{"error": {"code", "message", "details"}}`;
   - `error_body_exception_handler(exc, context)`: DRF's `ParseError`/`ValidationError`/`UnsupportedMediaType` → 400 `invalid_input` with `details = {"fields": exc.detail}` (or the parse message); other exceptions → DRF's default handler.
 
