@@ -26,15 +26,15 @@ description: "Task list for Feature 002: Route Candidates"
 
 ## Phase 1: Setup
 
-- [ ] T001 Create the test packages `tests/unit/routing/__init__.py` and `tests/unit/planner/__init__.py` (empty).
-- [ ] T002 [P] Create `tests/fixtures/osrm_dallas_chicago.json` by trimming the real OSRM response recorded in research R1. If that recording is unavailable, fetch it once with the R1 `curl`. Keep:
+- [X] T001 Create the test packages `tests/unit/routing/__init__.py` and `tests/unit/planner/__init__.py` (empty).
+- [X] T002 [P] Create `tests/fixtures/osrm_dallas_chicago.json` by trimming the real OSRM response recorded in research R1. If that recording is unavailable, fetch it once with the R1 `curl`. Keep:
   - `code: "Ok"`;
   - `routes[0].distance` = `1555353` (meters);
   - `routes[0].geometry` as a GeoJSON `LineString` of about 50 `[lng, lat]` points, taken evenly from the real geometry and including the first and last points;
   - `waypoints` exactly as recorded (`distance` 33.33… m and 8.10… m, with `location` and `name`).
 
   Add no other keys. **Note:** the geometry is far shorter than the distance on purpose. No test may assert geometry length ≈ distance on this fixture (plan, "Recorded fixture").
-- [ ] T003 [P] Add synthetic-route helpers in `tests/unit/planner/conftest.py`:
+- [X] T003 [P] Add synthetic-route helpers in `tests/unit/planner/conftest.py`:
   - `offset(lat, lng, north_miles, east_miles) -> (lat, lng)`, using the local equirectangular frame with `M = π·3958.8/180` mi per degree;
   - `straight_route(lat, lng, bearing, miles, step_miles)`;
   - `arc_route(center_lat, center_lng, radius_miles, start_deg, end_deg, n_points)`;
@@ -46,12 +46,12 @@ description: "Task list for Feature 002: Route Candidates"
 
 **Purpose**: shared value types used by both stories (`Route`, `LatLng`, routing errors).
 
-- [ ] T004 Write the failing test `tests/unit/routing/test_base.py` (pure, no Django), covering:
+- [X] T004 Write the failing test `tests/unit/routing/test_base.py` (pure, no Django), covering:
   - `LatLng` and `Route` are frozen dataclasses;
   - the `RoutingFailure` `StrEnum` values are exactly: `TIMED_OUT="timed out"`, `NETWORK_ERROR="network error"`, `SERVER_ERROR="server error"`, `RATE_LIMITED="rate limited"`, `INVALID_RESPONSE="invalid response"`, `NO_ROUTE="no route found"`, `NOT_NEAR_ROAD="start/finish not near a road"`;
   - `RoutingUnavailable(reason, detail, retry_after_seconds=None)` exposes those three attributes, and its `str()` contains the reason value and the detail;
   - `routing/base.py` imports no Django (an AST check like `tests/unit/stations/test_enums.py`).
-- [ ] T005 Implement `routing/base.py`: `LatLng(lat: float, lng: float)`, `Route(points: tuple[LatLng, ...], distance_miles: float, provider: str)`, `RoutingFailure`, `RoutingUnavailable`, and a `RoutingProvider` `Protocol` (`name: str`, `route(start, finish) -> Route`), as in data-model.md. Run T004 green.
+- [X] T005 Implement `routing/base.py`: `LatLng(lat: float, lng: float)`, `Route(points: tuple[LatLng, ...], distance_miles: float, provider: str)`, `RoutingFailure`, `RoutingUnavailable`, and a `RoutingProvider` `Protocol` (`name: str`, `route(start, finish) -> Route`), as in data-model.md. Run T004 green.
 
 **Checkpoint**: shared types exist; both stories can start.
 
@@ -65,7 +65,7 @@ description: "Task list for Feature 002: Route Candidates"
 
 ### Tests for User Story 1 ⚠️ (write first, show failing)
 
-- [ ] T006 [P] [US1] Write `tests/unit/routing/test_osrm.py` (respx, no Django). Every test asserts `respx_mock.calls.call_count == 1`. Cases:
+- [X] T006 [P] [US1] Write `tests/unit/routing/test_osrm.py` (respx, no Django). Every test asserts `respx_mock.calls.call_count == 1`. Cases:
   - **Request:** a `GET` to `{base}/route/v1/driving/-96.8,32.78;-87.63,41.88` with `overview=full&geometries=geojson` (longitude first).
   - **Success** (fixture T002): `distance_miles == 1555353 / 1609.344` (966.45…); `points[0] == LatLng(32.779709, -96.799911)` (lat/lng swapped from GeoJSON); `provider == "osrm"`.
   - **Timeouts:** `httpx.ConnectTimeout` and `httpx.ReadTimeout` → `TIMED_OUT`.
@@ -88,20 +88,20 @@ description: "Task list for Feature 002: Route Candidates"
     - a waypoint `distance` of `8046.73` m → `NOT_NEAR_ROAD`;
     - a waypoint `distance` of `8046.72` m → success (the limit is 5 mi inclusive).
   - **Timeout config:** the provider's client uses `httpx.Timeout(timeout_seconds)`, so the limit covers connect and each read.
-- [ ] T007 [P] [US1] Write `tests/unit/routing/test_factory.py` (pytest-django `settings` fixture), covering:
+- [X] T007 [P] [US1] Write `tests/unit/routing/test_factory.py` (pytest-django `settings` fixture), covering:
   - `ROUTING_PROVIDER="osrm"` → an `OSRMProvider` using `OSRM_BASE_URL` and `ROUTING_TIMEOUT_SECONDS`;
   - `ROUTING_PROVIDER="valhalla"` → `ImproperlyConfigured`, with a message that names the bad value and lists `osrm`.
 
 ### Implementation for User Story 1
 
-- [ ] T008 [US1] Implement `routing/osrm.py`, `OSRMProvider(base_url, timeout_seconds, client=None)`:
+- [X] T008 [US1] Implement `routing/osrm.py`, `OSRMProvider(base_url, timeout_seconds, client=None)`:
   - one `client.get(...)` per `route()`, with no retry loop anywhere;
   - map failures exactly as in research R2, in this order: 429 first; then, for any other 4xx, parse the JSON `code` of the body (`NoRoute` → `NO_ROUTE`, `NoSegment` → `NOT_NEAR_ROAD`, any other code or a non-JSON body → `SERVER_ERROR`) before the generic non-2xx mapping; `Retry-After` is accepted only as an integer string ≥ 0, then `min(v, 60)`; the snap limit is `MAX_SNAP_METERS = 5 * 1609.344`;
   - convert meters to miles by `/ 1609.344`, and GeoJSON `[lng, lat]` to `LatLng(lat, lng)`;
   - no Django import.
 
   Run T006 green.
-- [ ] T009 [US1] Implement `routing/factory.py`, `provider_from_settings()`. It reads `settings.ROUTING_PROVIDER`, `OSRM_BASE_URL` and `ROUTING_TIMEOUT_SECONDS`; the allowed providers are the dict `{"osrm": OSRMProvider}`; an unknown name raises `ImproperlyConfigured`. This is the only routing module that imports Django. Run T007 green.
+- [X] T009 [US1] Implement `routing/factory.py`, `provider_from_settings()`. It reads `settings.ROUTING_PROVIDER`, `OSRM_BASE_URL` and `ROUTING_TIMEOUT_SECONDS`; the allowed providers are the dict `{"osrm": OSRMProvider}`; an unknown name raises `ImproperlyConfigured`. This is the only routing module that imports Django. Run T007 green.
 
 **Checkpoint**: US1 is complete and testable offline. `quickstart.md` §2 (one real call) can be run by hand.
 
