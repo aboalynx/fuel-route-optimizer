@@ -1,0 +1,8 @@
+.specify/scripts/
+.specify/templates/
+.claude/
+.env
+.local
+.venv
+data/geonames
+data/cache/
