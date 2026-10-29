@@ -116,7 +116,7 @@ hand-made fixture. The real shipped fixture is produced by US2's real run (T031)
 
 ### Tests for User Story 2 ⚠️ (write first, must fail)
 
-- [ ] T013 [P] [US2] Write `tests/unit/stations/test_clean.py` (no DB) covering:
+- [X] T013 [P] [US2] Write `tests/unit/stations/test_clean.py` (no DB) covering:
   - **Header:** exactly the 7 names after `strip()`. A missing or renamed column raises at once with `missing or renamed column: <name>`.
   - **Row reasons,** one test each, asserting `(line, column, value, reason)`:
     - ID and Rack ID: `missing` / `not an integer`;
@@ -129,7 +129,7 @@ hand-made fixture. The real shipped fixture is produced by US2's real run (T031)
   - **Clean values:** values are stripped; prices are `Decimal` parsed from text (`Decimal("3.00733333")`).
   - **Line numbers:** `csv.DictReader.line_num`, with the header as line 1.
   - **`group_stations`:** one `StationRecord` per ID; `best_price == min(prices)`; name, address, city and state from the first row; all rows kept, in file order.
-- [ ] T014 [P] [US2] Write `tests/unit/stations/test_geonames.py` (no DB) covering:
+- [X] T014 [P] [US2] Write `tests/unit/stations/test_geonames.py` (no DB) covering:
   - **`normalise_place_name`:**
     - `"ST LOUIS "` → `"saint louis"`;
     - `"St. Louis"` → `"saint louis"`;
@@ -148,20 +148,20 @@ hand-made fixture. The real shipped fixture is produced by US2's real run (T031)
     - lat/lng source text is preserved;
     - a missing file raises a clear error naming the path and `https://download.geonames.org/export/dump/US.zip`.
   - **Lookup:** the main name is tried first; the alternate name only when the main name misses (research R3).
-- [ ] T015 [P] [US2] Write `tests/unit/stations/test_build.py` (no DB) covering:
+- [X] T015 [P] [US2] Write `tests/unit/stations/test_build.py` (no DB) covering:
   - **`build()` on the sample files:**
     - located stations with `via` set to `primary` or `alternate`;
     - `Nowhereville, KS` is unmatched;
     - the counts behind the report: rows read, Canadian rows dropped, US price rows read, price rows stored (excluding unmatched stations' rows), stations kept, stations with several prices, located count and %, dropped count.
   - **`assign_price_ids()`:** ids 1..N ordered by `(opis_id, CSV line)`.
   - **`format_report()`:** the exact labels in contracts/build_station_data.md, including `Stations located N (P%, threshold T%)`.
-- [ ] T016 [P] [US2] Write `tests/unit/stations/test_export.py` (no DB), for `write_unmatched_csv()`:
+- [X] T016 [P] [US2] Write `tests/unit/stations/test_export.py` (no DB), for `write_unmatched_csv()`:
   - header `opis_id,name,city,state`;
   - rows ordered by `opis_id`;
   - UTF-8 with `\n` line endings;
   - identical bytes on two writes;
   - written through a temp file and `os.replace` (no partial file left on error).
-- [ ] T017 [US2] Write `tests/integration/test_build_station_data.py` (pytest-django). Run `call_command("build_station_data", csv=…, geonames=…, plus the out_dirs overrides from T005)` on the samples and cover:
+- [X] T017 [US2] Write `tests/integration/test_build_station_data.py` (pytest-django). Run `call_command("build_station_data", csv=…, geonames=…, plus the out_dirs overrides from T005)` on the samples and cover:
   - **(a) Happy path:** exit OK; stations, prices and best prices as expected; `geo_source == GeoSource.CITY_CENTROID`; `match_score` null; report labels on stdout; unmatched file lists `Nowhereville`.
   - **(b) Idempotence:** two runs give identical PKs and byte-identical fixture and unmatched files.
   - **(c) Precision:** after the run, `flush` then `loaddata` of the produced fixture still reads `Decimal("3.00733333")`.
@@ -174,14 +174,14 @@ hand-made fixture. The real shipped fixture is produced by US2's real run (T031)
 
 ### Implementation for User Story 2
 
-- [ ] T018 [P] [US2] Implement `stations/pipeline/clean.py` (no Django imports):
+- [X] T018 [P] [US2] Implement `stations/pipeline/clean.py` (no Django imports):
   - **Constants:** `EXPECTED_HEADER` (7 names); `US_STATE_CODES` (50 states + DC); `CANADIAN_CODES = {AB, BC, MB, NB, NL, NS, NT, NU, ON, PE, QC, SK, YT}`.
   - **Dataclasses:** `PriceRow(line, opis_id, name, address, city, state, rack_id, price: Decimal)` and `ValidationProblem(line, column, value, reason)`.
   - **Exception:** `CsvValidationError(problems, total)`, whose `__str__` gives the first 50 lines plus `… and N more (total T)`.
   - **Functions:**
     - `read_price_rows(path) -> (rows, canadian_count, rows_read)` validates the whole file first and raises on any problem (FR-020, research R8);
     - `group_stations(rows) -> list[StationRecord]`, sorted by `opis_id`.
-- [ ] T019 [P] [US2] Implement `stations/pipeline/geonames.py` (no Django imports):
+- [X] T019 [P] [US2] Implement `stations/pipeline/geonames.py` (no Django imports):
   - **`normalise_place_name(s)`,** exactly FR-009: lower-case, strip; remove `.` and `'`; `-` → space; collapse spaces; token map `st→saint, ste→sainte, ft→fort, mt→mount`; join a `mc` token with the next one.
   - **`Place` dataclass:** `geonameid, name, state, lat_text, lng_text, population`.
   - **`load_gazetteer(path) -> Gazetteer(primary, alternate)`:**
@@ -190,18 +190,18 @@ hand-made fixture. The real shipped fixture is produced by US2's real run (T031)
     - tie rule: population desc, then geonameid asc;
     - raise `GazetteerMissing` with the path and the download URL if the file is absent.
   - **`Gazetteer.lookup(city, state) -> (Place, "primary" | "alternate") | None`.**
-- [ ] T020 [US2] Implement `stations/pipeline/build.py` (no Django imports; depends on T018, T019):
+- [X] T020 [US2] Implement `stations/pipeline/build.py` (no Django imports; depends on T018, T019):
   - **Dataclasses:** `LocatedStation`, and `BuildResult` (located, unmatched, all counts).
   - **`build(csv_path, geonames_path) -> BuildResult`.**
   - **`assign_price_ids(located) -> list[(id, opis_id, PriceRow)]`,** with ids 1..N ordered by `(opis_id, line)`.
   - **`located_pct(result)`.**
   - **`format_report(result, threshold, places_info=None) -> str`,** with the exact contract labels.
   - **Money rule:** no price arithmetic outside Python `Decimal`.
-- [ ] T021 [P] [US2] Implement `write_unmatched_csv(stations, path)` in `stations/pipeline/export.py` (no Django imports):
+- [X] T021 [P] [US2] Implement `write_unmatched_csv(stations, path)` in `stations/pipeline/export.py` (no Django imports):
   - `csv.writer(lineterminator="\n")`, UTF-8;
   - rows ordered by `opis_id`;
   - write to `path.with_suffix(".tmp")`, then `os.replace`.
-- [ ] T022 [US2] Implement the rebuild **service** and a **thin** command (constitution, Technical Constraints: logic lives in services):
+- [X] T022 [US2] Implement the rebuild **service** and a **thin** command (constitution, Technical Constraints: logic lives in services):
   - **Service, `stations/services/station_data.py`** (plus `stations/services/__init__.py`):
     - `rebuild_station_data(csv_path, geonames_path, *, min_geocoded_pct, export, fixture_out, unmatched_out, places_out) -> RebuildOutcome(result, report_text)`.
     - It owns the run phases, exactly as research R7:
@@ -219,7 +219,7 @@ hand-made fixture. The real shipped fixture is produced by US2's real run (T031)
     - `--no-export`;
     - `--skip-osm` (accepted no-op);
     - hidden test-only output paths: `--fixture-out`, `--unmatched-out`, `--places-out`, defaulting to the committed paths.
-- [ ] T023 [US2] Run `python -m pytest tests/unit/stations tests/integration/test_build_station_data.py`. Fix until green. The test-first evidence is not checked here after the fact. Before each of T018–T022, the matching test file is run and its failing output (import or assertion errors) is shown, and that output is the record.
+- [X] T023 [US2] Run `python -m pytest tests/unit/stations tests/integration/test_build_station_data.py`. Fix until green. The test-first evidence is not checked here after the fact. Before each of T018–T022, the matching test file is run and its failing output (import or assertion errors) is shown, and that output is the record.
 
 **Checkpoint**: the rebuild works on the samples, is reproducible, and fails safely.
 

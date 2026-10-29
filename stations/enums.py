@@ -26,3 +26,10 @@ _GEO_SOURCE_LABELS = {
     GeoSource.CITY_CENTROID: "City centroid",
     GeoSource.OSM: "OpenStreetMap",
 }
+
+
+class MatchVia(StrEnum):
+    """Which gazetteer name located a station: the main name, or an alternate as a fallback."""
+
+    PRIMARY = "primary"
+    ALTERNATE = "alternate"
