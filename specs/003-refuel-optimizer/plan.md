@@ -96,8 +96,12 @@ planner/
 
 tests/unit/planner/
 ├── oracle.py                    # DP over (station, whole fuel units) on small integer instances
-├── test_optimizer.py            # hand-worked scenarios, errors, invariants, reserve, purity (AST)
-└── test_oracle_agreement.py     # ~50 seeded random cases: cost and feasibility match the oracle
+├── test_oracle.py               # the oracle's own hand-checked cases
+├── test_optimizer_types.py      # types, round_cents, validation, purity (AST)
+├── test_optimizer.py            # US1 hand-worked scenarios and invariants
+├── test_oracle_agreement.py     # ~50 seeded random cases: cost and feasibility match the oracle
+├── test_infeasible.py           # US2 reasons, gap miles, details, messages
+└── test_reserve.py              # US3 optional reserve
 ```
 
 **Structure Decision**: the optimizer joins the existing pure `planner/` package next to

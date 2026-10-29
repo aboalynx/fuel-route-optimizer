@@ -5,8 +5,7 @@ Everything here runs offline. No database, no network.
 ## 1. Tests
 
 ```bash
-python -m pytest tests/unit/planner/test_optimizer.py tests/unit/planner/test_oracle_agreement.py \
-  --cov=planner.optimizer --cov-report=term-missing
+python -m pytest tests/unit/planner --cov=planner.optimizer --cov-report=term-missing
 ```
 
 Expected: all green, the oracle agrees on every seeded case, coverage of `planner/optimizer.py`
