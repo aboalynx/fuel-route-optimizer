@@ -19,3 +19,10 @@ def test_map_page(client):
     assert "/api/v1/route-plan/" in html
     assert "tile.openstreetmap.org" in html
     assert "{{" not in html and "{%" not in html
+
+
+def test_tiles_are_requested_with_a_referrer(client):
+    # Django sends Referrer-Policy: same-origin, so without this the browser sends no Referer
+    # to tile.openstreetmap.org and OSM answers every tile with "403 Access blocked".
+    html = client.get("/").content.decode()
+    assert 'referrerPolicy: "strict-origin-when-cross-origin"' in html
