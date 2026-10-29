@@ -14,7 +14,7 @@ from django.core.cache import cache
 
 from api.services.places import get_place_index
 from planner.corridor import Candidate, find_candidates
-from planner.fewer_stops import FewerStopsResult
+from planner.fewer_stops import FewerStopsResult, plan_with_min_saving
 from planner.geometry import cumulative_miles
 from planner.locations import (
     LocationError,
@@ -23,7 +23,7 @@ from planner.locations import (
     resolve_name,
     resolve_point,
 )
-from planner.optimizer import FuelPurchase, InfeasibleRoute, PlanStation, plan_refuelling
+from planner.optimizer import FuelPurchase, InfeasibleRoute, PlanStation
 from planner.route_output import point_at_mile
 from planner.station_index import StationIndex, StationInfo
 from routing.base import LatLng, Route
@@ -145,9 +145,10 @@ def plan_route(inp: RoutePlanInput, *, provider=None) -> RoutePlanResult:
     timer.lap("candidates")
 
     try:
-        plan = plan_refuelling(
+        result = plan_with_min_saving(
             distance,
             stations,
+            min_saving_usd=inp.min_saving_per_stop_usd,
             mpg=vehicle.mpg,
             max_range_miles=vehicle.max_range_miles,
             start_fuel_gallons=start_fuel,
@@ -159,7 +160,6 @@ def plan_route(inp: RoutePlanInput, *, provider=None) -> RoutePlanResult:
             point_at_mile(route, float(error.gap_start_mile)),
             point_at_mile(route, float(error.gap_end_mile)),
         ) from error
-    result = FewerStopsResult(plan=plan, cheapest=plan, stops_dropped=0)
     timer.lap("optimize")
 
     return RoutePlanResult(

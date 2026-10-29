@@ -178,7 +178,7 @@ description: "Task list for Feature 004: Route Plan API"
 
 ### Tests for User Story 6 ⚠️
 
-- [ ] T026 [P] [US6] Write `tests/unit/planner/test_fewer_stops.py` (pure, 10 mpg, 500 mi):
+- [X] T026 [P] [US6] Write `tests/unit/planner/test_fewer_stops.py` (pure, 10 mpg, 500 mi):
   - `min_saving_usd = 0` → `plan == cheapest == plan_refuelling(...)`, `stops_dropped == 0`, extra `0.00` (several inputs from `tests/unit/planner/test_optimizer.py`);
   - a hand-made trip whose cheapest plan has a stop saving $0.10 → with 5 that stop is dropped, `stops_dropped == 1`, `extra_cost_vs_cheapest_usd ≤ 0.10`, and gallons move to another stop;
   - **invariant** on several trips and thresholds (0.5, 5, 50): for every stop in `plan`, re-planning over the other stops of `plan` is infeasible or costs ≥ threshold more;
@@ -187,12 +187,12 @@ description: "Task list for Feature 004: Route Plan API"
   - validation: `-1`, `101` → `ValueError`; `5.0` → `TypeError`;
   - `InfeasibleRoute` from the cheapest plan propagates unchanged;
   - deterministic: two calls equal; no Django import (AST).
-- [ ] T027 [P] [US6] Add to `tests/integration/api/test_route_plan_api.py`: with `min_saving_per_stop_usd: 5` on the route-plan fixture, `summary.stops_dropped` and `summary.extra_cost_vs_cheapest_usd` are present and consistent with a request without it (`total_fuel_cost_usd` difference equals `extra_cost_vs_cheapest_usd`), and `summary.assumptions.min_saving_per_stop_usd == 5`; without it, both are 0.
+- [X] T027 [P] [US6] Add to `tests/integration/api/test_route_plan_api.py`: with `min_saving_per_stop_usd: 5` on the route-plan fixture, `summary.stops_dropped` and `summary.extra_cost_vs_cheapest_usd` are present and consistent with a request without it (`total_fuel_cost_usd` difference equals `extra_cost_vs_cheapest_usd`), and `summary.assumptions.min_saving_per_stop_usd == 5`; without it, both are 0.
 
 ### Implementation for User Story 6
 
-- [ ] T028 [US6] Implement `planner/fewer_stops.py` (`FewerStopsResult`, `plan_with_min_saving`) per research R6. Run T026 green.
-- [ ] T029 [US6] In `api/services/route_plan.py`, replace the `plan_refuelling` wrapper with `plan_with_min_saving(..., min_saving_usd=inp.min_saving_per_stop_usd)`; the presenter adds `stops_dropped` and `extra_cost_vs_cheapest_usd` (already in the contract). Run T027 and all API tests green.
+- [X] T028 [US6] Implement `planner/fewer_stops.py` (`FewerStopsResult`, `plan_with_min_saving`) per research R6. Run T026 green.
+- [X] T029 [US6] In `api/services/route_plan.py`, replace the `plan_refuelling` wrapper with `plan_with_min_saving(..., min_saving_usd=inp.min_saving_per_stop_usd)`; the presenter adds `stops_dropped` and `extra_cost_vs_cheapest_usd` (already in the contract). Run T027 and all API tests green.
 
 ---
 

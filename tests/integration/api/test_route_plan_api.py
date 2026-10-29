@@ -113,3 +113,17 @@ def test_later_requests_query_no_station_data(
     post(client, TRIP)
     with django_assert_num_queries(0):
         assert post(client, TRIP).status_code == 200
+
+
+def test_min_saving_per_stop_is_reported(client, route_stations, osrm):
+    plain = post(client, TRIP).json()["summary"]
+    assert (plain["stops_dropped"], plain["extra_cost_vs_cheapest_usd"]) == (0, 0)
+
+    summary = post(client, {**TRIP, "min_saving_per_stop_usd": 5}).json()["summary"]
+    assert summary["assumptions"]["min_saving_per_stop_usd"] == 5
+    extra = Decimal(str(summary["extra_cost_vs_cheapest_usd"]))
+    difference = Decimal(str(summary["total_fuel_cost_usd"])) - Decimal(
+        str(plain["total_fuel_cost_usd"])
+    )
+    assert extra == difference >= 0
+    assert summary["stops_count"] + summary["stops_dropped"] == plain["stops_count"]
