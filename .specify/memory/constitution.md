@@ -1,21 +1,3 @@
-<!--
-Sync Impact Report
-- Version change: (unversioned template) → 1.0.0
-- Modified principles: template placeholders replaced with 8 project principles
-  - I. Deterministic Results
-  - II. Single External Routing Call
-  - III. Pure Core
-  - IV. Test-First, Offline Tests
-  - V. Explicit Units and Decimal Money
-  - VI. Documented Data Assumptions
-  - VII. Simplicity Over Cleverness
-  - VIII. Zero-Setup Reviewer Run
-- Added sections: Core Principles (8), Technical Constraints, Development Workflow, Governance
-- Removed sections: none
-- Templates requiring updates: none (dependent templates read the constitution at runtime)
-- Follow-up TODOs: none
--->
-
 # Fuel Route Optimizer Constitution
 
 ## Core Principles
@@ -81,7 +63,13 @@ The project MUST NOT add services, queues, caches, background workers, or infras
 that the assignment does not require. Prefer the simplest algorithm and data structure that
 meets the requirements; any added complexity MUST be justified in the plan.
 
-**Rationale**: A small, readable solution is easier to review and less likely to break.
+A bounded in-process cache (Django's built-in LocMem cache) for routing responses is permitted.
+It must stay optional, must not require external infrastructure, and a cache hit must not change
+the computed plan.
+
+**Rationale**: A small, readable solution is easier to review and less likely to break. The
+routing cache is the one exception: it keeps repeated requests fast and spares the shared routing
+service, without adding a service to run or changing any result (Principle I).
 
 ### VIII. Zero-Setup Reviewer Run
 
@@ -116,4 +104,4 @@ semantic versioning: MAJOR for removing or redefining a principle, MINOR for add
 principle or materially expanding guidance, PATCH for wording and clarifications. Plans
 and reviews MUST include a constitution check against every principle above.
 
-**Version**: 1.0.0 | **Ratified**: 2026-10-29 | **Last Amended**: 2026-10-29
+**Version**: 1.1.0 | **Ratified**: 2026-10-29 | **Last Amended**: 2026-10-29

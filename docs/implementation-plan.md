@@ -297,7 +297,7 @@ This table is updated in the Phase 0 commit: tick each Phase 0 item off as done.
 | Django project `config/`, apps `stations`, `api`, `web`, empty packages `planner`, `routing` | Done |
 | `.env` / `.env.example`, django-environ, settings in Section 5.3 | Done |
 | ruff and pytest config in `pyproject.toml`, smoke test | Done |
-| Constitution v1.0.0 ratified | Done; amendment to v1.1.0 in Phase 0 |
+| Constitution v1.1.0 (LocMem routing-cache amendment) | Done (Phase 0) |
 | GeoNames `US.txt` downloaded (git-ignored) | Done |
 | `.gitignore` complete; committed `__pycache__/*.pyc` untracked | Done (Phase 0) |
 | Python support | Done: Python 3.13–3.14 officially (Django 6.1.2); also developed and CI-tested on 3.15. Django adds official 3.15 support in 6.1.3. Local venv: 3.15.2 (cp315 wheels exist for numpy, scipy, rapidfuzz) |
@@ -354,7 +354,7 @@ Do these in order:
   - `requirements.txt` (runtime): `Django>=6.1.2,<6.2`, `djangorestframework`, `django-environ`, `numpy`, `scipy`, `httpx`, `rapidfuzz`.
   - `requirements-dev.txt`: starts with `-r requirements.txt`, then `ruff`, `pytest`, `pytest-django`, `pytest-cov`, `respx`, `pre-commit`.
 - [x] **CI.** `.github/workflows/ci.yml`: on push and pull_request; matrix Python 3.13 / 3.14 / 3.15 (`fail-fast: false`, `allow-prereleases: true`) with pip cache, `pip install -r requirements-dev.txt`, `ruff check .`, `ruff format --check .`, `pytest --cov=planner --cov=stations --cov=routing --cov-report=term-missing`.
-- [ ] **Constitution amendment** via `/speckit-constitution` (MINOR, v1.0.0 → v1.1.0), added under Principle VII: *"A bounded in-process cache (Django's built-in LocMem cache) for routing responses is permitted. It must stay optional, must not require external infrastructure, and a cache hit must not change the computed plan."*
+- [x] **Constitution amendment** via `/speckit-constitution` (MINOR, v1.0.0 → v1.1.0), added under Principle VII: *"A bounded in-process cache (Django's built-in LocMem cache) for routing responses is permitted. It must stay optional, must not require external infrastructure, and a cache hit must not change the computed plan."*
 - [x] **Commit** `chore: complete project setup and CI` (local). CI goes green on the first push.
 
 ---
