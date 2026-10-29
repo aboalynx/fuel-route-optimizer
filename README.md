@@ -67,7 +67,7 @@ python manage.py loaddata stations
 python -m pytest
 ```
 
-`loaddata stations` loads the committed `stations/fixtures/stations.json` (6,618 stations, 7,522
+`loaddata stations` loads the committed `stations/fixtures/stations.json` (6,620 stations, 7,524
 price rows). It needs no network access and no gazetteer download. Running the API is planned
 (feature 004).
 
@@ -89,7 +89,7 @@ rewrites three committed files, which come out byte-for-byte identical on every 
 `--min-geocoded-pct` (default 95), it prints the report, writes the unmatched file and changes
 nothing else. The shipped data was built with the default threshold of 95%.
 
-**Measured on a 2018 MacBook Pro (Intel i7-8750H, Python 3.15.2):** full rebuild 11.2 s, and
+**Measured on a 2018 MacBook Pro (Intel i7-8750H, Python 3.15.2):** full rebuild 11.0 s, and
 `loaddata stations` into a fresh database 10.1 s.
 
 ## Configuration
@@ -123,10 +123,10 @@ Tank capacity is derived from range and mpg, never configured separately.
 **Rebuild report for the shipped data:**
 
 ```text
-Rows read 8,151 | Canadian rows dropped 620 | US price rows read 7,531 | price rows stored 7,522
+Rows read 8,151 | Canadian rows dropped 620 | US price rows read 7,531 | price rows stored 7,524
 Stations kept 6,626 | with several prices 568
-Stations located 6,618 (99.9%, threshold 95%) | city_centroid 100% | osm 0%
-Stations dropped 8 (not found 6, rejected match 2) -> data/reports/unmatched_cities.csv
+Stations located 6,620 (99.9%, threshold 95%) | city_centroid 6,618 (99.97%) | manual 2 (0.03%) | osm 0 (0%)
+Stations dropped 6 (not found 6, rejected match 0) -> data/reports/unmatched_cities.csv
 Places index 31,503 places, 0.6 MB
 ```
 
@@ -134,12 +134,15 @@ Cities are matched in three tiers: main name, then alternate name, then a compac
 removed and a leading N/S/E/W spelled out), so `De Forest` finds `DeForest` and `S Coffeyville`
 finds `South Coffeyville`. 6 stations are not found, because
 their cities are not populated places in GeoNames: townships (`Crescent, PA`, `Corinth, ME`), a
-reservation (`Pueblo Of Acoma, NM`) and a marina area (`Willow Beach, AZ` ×3). A committed,
-hand-reviewed list, [data/overrides/rejected_matches.csv](data/overrides/rejected_matches.csv),
-rejects known-wrong matches and never supplies coordinates. A wrong location is worse than a
-missing one. It drops `Willington, CT` (2 stations), which GeoNames would otherwise place at
-Millington, about 28 miles away. All 8 are listed with their reason in
-[data/reports/unmatched_cities.csv](data/reports/unmatched_cities.csv).
+reservation (`Pueblo Of Acoma, NM`) and a marina area (`Willow Beach, AZ` ×3). They are listed
+with their reason in [data/reports/unmatched_cities.csv](data/reports/unmatched_cities.csv).
+
+Two reviewed lists in `data/overrides/` handle cases the gazetteer gets wrong.
+[manual_coordinates.csv](data/overrides/manual_coordinates.csv) places 2 stations at I-84 Exit 71
+in Willington, CT, using coordinates from OpenStreetMap (`geo_source = manual`). GeoNames has no
+Willington and would otherwise match Millington, about 28 miles away.
+[rejected_matches.csv](data/overrides/rejected_matches.csv) (empty for now) can drop any future
+wrong match, because a wrong location is worse than a missing one.
 
 **Assumptions:**
 
@@ -222,13 +225,13 @@ any part of it.
 ## Data attribution
 
 - City coordinates and the committed place lookup (`data/places/us_places.csv.gz`) come from [GeoNames](https://www.geonames.org/), licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). The place lookup redistributes GeoNames data.
-- OpenStreetMap contributors (ODbL), only if feature 005 ships.
+- Station coordinates in `data/overrides/manual_coordinates.csv` come from OpenStreetMap: © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright), available under the [Open Database License (ODbL)](https://opendatacommons.org/licenses/odbl/).
 
 ## Future work
 
 - PostgreSQL + PostGIS with a spatial index instead of the in-memory KD-tree
 - Exact station coordinates
-- Use GeoNames admin areas (towns and townships, class A/ADM3) as an extra tier before alternate names. That would place Willington CT correctly and recover Crescent PA and Corinth ME.
+- Use GeoNames admin areas (towns and townships, class A/ADM3) as an extra tier before alternate names. That would locate Willington CT without a manual override and recover Crescent PA and Corinth ME.
 - Detour cost for off-route stations
 - Live prices
 - A truck routing profile
