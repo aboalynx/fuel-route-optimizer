@@ -1,8 +1,27 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Local config and data
+.env
+db.sqlite3
+.local/
+data/geonames/
+data/cache/
+
+# Test and tool caches
+.coverage
+htmlcov/
+.pytest_cache/
+.ruff_cache/
+
+# OS
+.DS_Store
+
+# Spec-Kit / Claude tooling (.specify/memory/ and specs/ stay tracked)
 .specify/scripts/
 .specify/templates/
+.specify/integrations/
+.specify/workflows/
 .claude/
-.env
-.local
-.venv
-data/geonames
-data/cache/
