@@ -214,7 +214,7 @@ description: "Task list for Feature 004: Route Plan API"
 - [ ] T036 Check the map page by hand: Dallas, TX → Chicago, IL and New York, NY → Los Angeles, CA render with stops; an unknown city shows the error (spec US4 scenario 3 is checked only by hand, since the page has no JavaScript test setup by design); the page works at phone width.
 - [X] T037 [P] Sync `docs/implementation-plan.md` Feature 004 (service in `api/services/` not `planner/services/`, the new modules, the min-saving rule, the precision rule) and tick its "Done when"; add a short "Fewer stops" section to `docs/algorithms/refuelling-greedy.md` (the rule, why only the plan's own stops, the cascade measured in the prototype, the guarantee and its limit).
 - [X] T038 Quality gate: `python -m pytest --cov=planner --cov=routing --cov=api --cov=stations --cov-report=term-missing` (≥ 90% on `planner/`, `routing/` and `api/`; whole suite green); `ruff check .`; `ruff format --check .`; `python manage.py check`.
-- [ ] T039 Run the full quickstart.md (§1–§7) and confirm no test made a network call. Then check SC-006 from a fresh clone in the scratchpad: follow the README setup exactly (venv, `pip install -r requirements-dev.txt`, `cp .env.example .env`, `migrate`, `loaddata stations`, `pytest`), start `runserver` and make one request; no API key, no build step.
+- [X] T039 Run the full quickstart.md (§1–§7) and confirm no test made a network call. Then check SC-006 from a fresh clone in the scratchpad: follow the README setup exactly (venv, `pip install -r requirements-dev.txt`, `cp .env.example .env`, `migrate`, `loaddata stations`, `pytest`), start `runserver` and make one request; no API key, no build step.
 
 ---
 
