@@ -208,3 +208,19 @@ def test_internal_error_is_not_reported_as_bad_input(
     text = response.content.decode()
     assert "ValueError" not in text and "sorted" not in text and "Traceback" not in text
     assert any(r.exc_info and r.exc_info[0] is ValueError for r in caplog.records)
+
+
+def test_a_failure_outside_the_service_is_also_internal_error(
+    client, route_stations, osrm, monkeypatch, caplog
+):
+    def broken(result):
+        raise KeyError("secret")
+
+    monkeypatch.setattr("api.views.present", broken)
+    client.raise_request_exception = False
+    response = post(client, TRIP)
+    found = error(response, 500, "internal_error")
+    assert found["message"] == "internal error"
+    text = response.content.decode()
+    assert "KeyError" not in text and "secret" not in text and "Traceback" not in text
+    assert any(r.exc_info and r.exc_info[0] is KeyError for r in caplog.records)

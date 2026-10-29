@@ -20,7 +20,7 @@ The vehicle has a 500-mile range and does 10 miles per gallon.
 - [x] 001 station-data-pipeline: clean CSV, geocode stations offline, committed fixture (done)
 - [x] 002 route-candidates: one routing call + KD-tree corridor search (done)
 - [x] 003 refuel-optimizer: optimal greedy refuelling plan (done)
-- [x] 004 route-plan-api: `POST /api/v1/route-plan/` + Leaflet map page (done)
+- [x] 004 route-plan-api: `POST /api/v1/route-plan/` + Leaflet map page (done; map page browser check pending)
 - [ ] 005 osm-precision-layer: exact station coordinates from OpenStreetMap (planned, stretch)
 
 ## How it works

@@ -1,6 +1,5 @@
 """POST (and GET) /api/v1/route-plan/: parse, call the service, format, map errors."""
 
-import logging
 import re
 
 from django.conf import settings
@@ -23,9 +22,6 @@ from planner.optimizer import InfeasibleReason
 from planner.station_index import StationDataMissing
 from routing.base import RoutingUnavailable
 
-logger = logging.getLogger(__name__)
-
-
 COORDINATES = re.compile(r"^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$")
 
 
@@ -47,13 +43,25 @@ class RoutePlanView(APIView):
         serializer.is_valid(raise_exception=True)
         try:
             result = plan_route(RoutePlanInput(**serializer.validated_data))
-        except Exception as error:  # noqa: BLE001 - every failure becomes a JSON error body
+        except DOMAIN_ERRORS as error:
             return error_for(error)
-        return Response(present(result))
+        return Response(present(result))  # anything else: 500 internal_error (api.exceptions)
+
+
+DOMAIN_ERRORS = (
+    InvalidPlanInput,
+    LocationNotFound,
+    LocationOutsideUS,
+    SameLocation,
+    InfeasibleRouteAt,
+    RoutingUnavailable,
+    StationDataMissing,
+    PlaceDataMissing,
+)
 
 
 def error_for(error: Exception) -> Response:
-    """The documented error response for a domain failure; anything else is internal_error."""
+    """The documented error response for each domain failure."""
     match error:
         case InvalidPlanInput():
             return error_response(
@@ -94,8 +102,7 @@ def error_for(error: Exception) -> Response:
             return error_response(ErrorCode.STATION_DATA_MISSING, str(error), status=503)
         case PlaceDataMissing():
             return error_response(ErrorCode.PLACE_DATA_MISSING, str(error), status=503)
-    logger.exception("route plan failed")
-    return error_response(ErrorCode.INTERNAL_ERROR, "internal error", status=500)
+    raise error  # not a domain error: handled as internal_error
 
 
 def _location_details(error) -> dict:
