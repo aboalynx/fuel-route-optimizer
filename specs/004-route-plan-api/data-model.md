@@ -28,11 +28,11 @@ No database tables. Value types live in pure modules; the HTTP shapes are in
 | --- | --- | --- |
 | `query` | `str` | The input string, or `"lat,lng"` for coordinates |
 | `lat`, `lng` | `float` | The place's coordinates for a city; the input for coordinates |
-| `place_name` | `str \| None` | `"Dallas, TX"` style display name, if resolved from a name |
+| `place_name` | `str \| None` | `"Dallas, TX"` style display name, if resolved from a name; returned as `name` in the response (null for coordinates) |
 
 ### Errors
 
-`LocationNotFound(query, message)`, `LocationOutsideUS(query, message)` (research R2 messages).
+`LocationNotFound(query, message, field=None)`, `LocationOutsideUS(query, message, field=None)` (research R2 messages). The pure resolver leaves `field` empty; the service sets it to `"start"` or `"finish"` before re-raising, and the view returns it in `details.field`.
 
 ## Routing cache (`routing/cached.py`, pure)
 
@@ -74,6 +74,10 @@ over the other stops costs that much more) or cannot be removed (re-planning is 
 `candidates_count: int`; `result: FewerStopsResult`; `stations: dict[int, StationInfo]` (for the
 stops); `stop_points: dict[int, tuple[float, float]]` (station lat/lng); `off_route_miles:
 dict[int, float]`; `vehicle` (mpg, range, capacity); `timings_ms: dict[str, int]`.
+
+### `InvalidInput(field, message)`
+
+Raised by the service for request values that depend on the vehicle (research R8); mapped to 400 `invalid_input` with `details.fields = {field: [message]}`.
 
 ### `SameLocation(query_start, query_finish, reason)`
 

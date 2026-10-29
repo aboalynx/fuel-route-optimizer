@@ -28,10 +28,10 @@ description: "Task list for Feature 004: Route Plan API"
 ## Phase 1: Setup
 
 - [ ] T001 Update `config/settings.py` (and document new keys in `.env.example` as comments):
-  - `REST_FRAMEWORK = {"COERCE_DECIMAL_TO_STRING": False, "DEFAULT_AUTHENTICATION_CLASSES": [], "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.AllowAny"], "UNAUTHENTICATED_USER": None, "EXCEPTION_HANDLER": "api.exceptions.error_body_exception_handler"}`;
+  - `REST_FRAMEWORK = {"COERCE_DECIMAL_TO_STRING": False, "DEFAULT_AUTHENTICATION_CLASSES": [], "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.AllowAny"], "UNAUTHENTICATED_USER": None}` (the `EXCEPTION_HANDLER` key is added in T008, together with its module);
   - `CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache", "LOCATION": "routes", "OPTIONS": {"MAX_ENTRIES": 500}}}`;
   - `ROUTE_CACHE_TTL_SECONDS = env.int("ROUTE_CACHE_TTL_SECONDS", default=86400)`, `ROUTING_RETRY_AFTER_SECONDS = env.int("ROUTING_RETRY_AFTER_SECONDS", default=30)`, `PLACES_INDEX_FILE = BASE_DIR / "data" / "places" / "us_places.csv.gz"`.
-  - Run `python manage.py check` (the exception handler module is created in T008; until then point `EXCEPTION_HANDLER` at it and create an empty stub so `check` passes).
+  - Run `python manage.py check`.
 - [ ] T002 [P] Create the empty packages `api/services/__init__.py`, `tests/unit/api/__init__.py`, `tests/integration/api/__init__.py`.
 - [ ] T003 [P] Create `tests/fixtures/stations_route_plan.json` (Django fixture of `stations.fuelstation`, same fields as `tests/fixtures/stations_sample.json`: `name`, `address`, `city`, `state`, `lat`, `lng`, `geo_source` `"city_centroid"`, `match_score` null, `best_price` as an 8-dp string). Place stations **exactly on points of** `tests/fixtures/osrm_dallas_chicago.json`'s geometry (50 `[lng, lat]` points), so they are 0 mi off the route:
   - pk 101 at geometry index 8, price `"3.10000000"`; pk 102 at index 16, `"2.95000000"`; pk 103 at index 24, `"3.25000000"`; pk 104 at index 36, `"2.90000000"`; pk 105 at index 20 moved 30 mi east (`lng + 30 / (69.17 × cos(lat))`), `"1.00000000"` (outside the 10-mi corridor, must never be a candidate).
@@ -41,6 +41,7 @@ description: "Task list for Feature 004: Route Plan API"
   - `route_stations` fixture: `call_command("loaddata", "tests/fixtures/stations_route_plan.json")`;
   - `osrm` fixture: a respx router mocking `GET {OSRM_BASE_URL}/route/v1/driving/...` with the recorded fixture (returns the route so tests can read `.call_count`);
   - `post(client, body)` helper: `client.post("/api/v1/route-plan/", body, content_type="application/json")`.
+  - Docstring note: the recorded fixture keeps ~50 of the real route's points, so its geometry is shorter than its distance and `find_candidates` logs its rescale WARNING on every API test. This is expected; no API test asserts on that log, and tests that check logging use `caplog` on their own logger only.
 
 ---
 
@@ -57,11 +58,12 @@ description: "Task list for Feature 004: Route Plan API"
   - `"Springfield, XX"` → `LocationNotFound` ("unknown state code 'XX'");
   - `"Atlantis, TX"` → `LocationNotFound` naming the input;
   - `resolve_point(32.78, -96.80)` → inside (Dallas within 25 mi), `query == "32.78,-96.8"`, coordinates echoed unchanged; a point 30 mi from every place → `LocationOutsideUS`;
-  - `load_place_index` on an empty file → `PlaceDataMissing`;
+  - `load_place_index` on an empty or missing file → `PlaceDataMissing`;
+  - `LocationNotFound` / `LocationOutsideUS` have `field is None` from the resolver;
   - `planner/locations.py` imports no Django (AST).
-- [ ] T006 [P] Write the failing test `tests/unit/api/test_enums.py`: `ErrorCode` values are exactly `invalid_input`, `location_not_found`, `location_outside_us`, `same_location`, `infeasible_route`, `routing_unavailable`, `station_data_missing`; `api/enums.py` imports no Django (AST).
+- [ ] T006 [P] Write the failing test `tests/unit/api/test_enums.py`: `ErrorCode` values are exactly `invalid_input`, `location_not_found`, `location_outside_us`, `same_location`, `infeasible_route`, `routing_unavailable`, `station_data_missing`, `place_data_missing`; `api/enums.py` imports no Django (AST).
 - [ ] T007 Implement `planner/locations.py` per research R2 and data-model.md (`Place`, `PlaceIndex`, `ResolvedLocation`, `LocationNotFound`, `LocationOutsideUS`, `PlaceDataMissing`, `load_place_index(path)`, `resolve_name(index, text)`, `resolve_point(index, lat, lng)`), reusing `stations.pipeline.geonames.normalise_place_name` / `compact_place_name` and `planner.geometry.to_unit_vectors` / `chord_for_miles`. Implement `api/enums.py` (`ErrorCode` `StrEnum`). Run T005 and T006 green.
-- [ ] T008 Implement `api/services/places.py` (`get_place_index()` with `functools.lru_cache(maxsize=1)`, reading `settings.PLACES_INDEX_FILE`; never called at import or in `AppConfig.ready()`) and `api/exceptions.py`:
+- [ ] T008 Implement `api/services/places.py` (`get_place_index()` with `functools.lru_cache(maxsize=1)`, reading `settings.PLACES_INDEX_FILE`; never called at import or in `AppConfig.ready()`) and `api/exceptions.py`, then add `"EXCEPTION_HANDLER": "api.exceptions.error_body_exception_handler"` to `REST_FRAMEWORK` in `config/settings.py` and run `python manage.py check`:
   - `error_response(code: ErrorCode, message: str, details: dict | None, status: int, headers=None) -> Response` building `{"error": {"code", "message", "details"}}`;
   - `error_body_exception_handler(exc, context)`: DRF's `ParseError`/`ValidationError`/`UnsupportedMediaType` → 400 `invalid_input` with `details = {"fields": exc.detail}` (or the parse message); other exceptions → DRF's default handler.
 
@@ -79,7 +81,7 @@ description: "Task list for Feature 004: Route Plan API"
 
 - [ ] T009 [P] [US1] Write `tests/unit/planner/test_route_output.py` (pure): `thin_line` keeps ≤ `max_points + 1` points, always the first and last, unchanged when already short; `point_at_mile(route, 0)` is the first point, at `route.distance_miles` the last, halfway along a 2-point straight route the midpoint (miles rescaled to `distance_miles`); `route_geojson` returns a `FeatureCollection` with one `LineString` (`properties.kind == "route"`, coordinates `[lng, lat]`) and one `Point` per stop (`kind == "fuel_stop"`, `sequence` from 1, `opis_id`, `name`, `price_usd_per_gallon`, `gallons`, `cost_usd`); no Django import (AST).
 - [ ] T010 [P] [US1] Write `tests/unit/api/test_serializers.py`: `start`/`finish` accept `"Dallas, TX"` or `{"lat", "lng"}`; reject `{"lat": 200, ...}`, `{"lat": "x"}`, `""`, a 101-char string, a list; numeric fields parse to `Decimal` (`"start_fuel_gallons": 20.5` → `Decimal("20.5")`, never via float repr noise); ranges: `corridor_miles` 1..25, `reserve_gallons` 0..25, `min_saving_per_stop_usd` 0..100, `start_fuel_gallons` ≥ 0 (capacity checked by the optimizer); unknown field `"min_saving_usd"` → error naming it; defaults: `corridor_miles` = `settings.CORRIDOR_MILES`, reserve 0, min saving 0, start fuel `None`.
-- [ ] T011 [P] [US1] Write `tests/unit/api/test_presenters.py` (build a `RoutePlanResult` by hand): precision per the contract (money 2 dp, gallons 4 dp, price exact, miles 3 dp); `summary.total_fuel_cost_usd == sum(stop.cost_usd)`; for every stop `abs(gallons × price_usd_per_gallon − cost_usd) ≤ Decimal("0.005")`; `fuel_stops[].sequence` from 1 in route order; `summary.assumptions` echoes all inputs; `meta` fields present.
+- [ ] T011 [P] [US1] Write `tests/unit/api/test_presenters.py` (build a `RoutePlanResult` by hand): precision per the contract (money 2 dp, gallons 4 dp, price exact, miles 3 dp); `summary.total_fuel_cost_usd == sum(stop.cost_usd)`; for every stop `abs(gallons × price_usd_per_gallon − cost_usd) ≤ Decimal("0.005")`; `fuel_stops[].sequence` from 1 in route order; `summary.assumptions` echoes all inputs; `summary.fuel_left_gallons` present (4 dp); `start.name == "Dallas, TX"` for a name input and `null` for coordinates; `meta` fields present.
 - [ ] T012 [US1] Write `tests/integration/api/test_route_plan_api.py` (fixtures from T004), covering:
   - `"Dallas, TX"` → `"Chicago, IL"`: 200, the top-level keys `start, finish, summary, fuel_stops, map, meta`; `meta.routing_calls == 1`, `cached is False`, `osrm.call_count == 1`; `meta.candidate_stations_considered == 4` (pk 105 excluded); stops in route order with all contract fields; money check as in T011;
   - the same with `{"lat": 32.78, "lng": -96.80}` inputs: 200, `start.query == "32.78,-96.8"`;
@@ -93,12 +95,13 @@ description: "Task list for Feature 004: Route Plan API"
 - [ ] T013 [US1] Implement `planner/route_output.py` (`thin_line(points, max_points=5000)`, `point_at_mile(route, mile)`, `route_geojson(points, stops)`) per research R7. Run T009 green.
 - [ ] T014 [US1] Implement `api/serializers.py`: `LocationField` (string or `{lat, lng}` → `str` or `(float, float)`), `RoutePlanRequestSerializer` with `DecimalField`s (`max_digits=10`, `decimal_places=4` for gallons/miles, `2` for USD) and the ranges from data-model.md, rejecting unknown fields in `validate`. Run T010 green.
 - [ ] T015 [US1] Implement `api/services/route_plan.py`: `RoutePlanInput`, `RoutePlanResult`, `plan_route(inp, *, provider=None)`:
-  - resolve both locations with `get_place_index()` (timed as `resolve`);
+  - resolve both locations with `get_place_index()` (timed as `resolve`); on `LocationNotFound`/`LocationOutsideUS` set `exc.field` to `"start"` or `"finish"` and re-raise;
+  - check the vehicle-dependent request values **before** routing (capacity = `VEHICLE_MAX_RANGE_MILES / VEHICLE_MPG`): start fuel ≤ capacity, reserve < capacity, start fuel ≥ reserve, else `InvalidInput(field, message)` (research R8);
   - route with `provider_from_settings()` (timed as `routing`; `routing_calls = 1`, `cached = False` for now);
   - `find_candidates(route, get_station_index(), float(inp.corridor_miles))` (timed as `candidates`);
   - convert to `PlanStation` per research R5 (quantize 0.001, clamp, **re-sort by `(mile_marker, opis_id)`**), vehicle from settings via `Decimal(str(...))`;
   - `plan_refuelling(...)` wrapped as `FewerStopsResult(plan, cheapest=plan, stops_dropped=0)` (US6 replaces this), timed as `optimize`; `total` timing.
-- [ ] T016 [US1] Implement `api/presenters.py` (`present(result) -> dict` per the contract, using `thin_line` and `route_geojson`) and `api/views.py` `RoutePlanView(APIView).post` (serializer → `plan_route` → `present` → 200; domain errors mapped in a single table, initially `ValueError`/`TypeError` → 400 `invalid_input`), `api/urls.py` (`api/v1/route-plan/`), and include it in `config/urls.py`. Run T011 and T012 green.
+- [ ] T016 [US1] Implement `api/presenters.py` (`present(result) -> dict` per the contract, using `thin_line` and `route_geojson`) and `api/views.py` `RoutePlanView(APIView).post` (serializer → `plan_route` → `present` → 200; domain errors mapped in a single table, initially `InvalidInput` → 400 `invalid_input`; `ValueError`/`TypeError` are **not** caught), `api/urls.py` (`api/v1/route-plan/`), and include it in `config/urls.py`. Run T011 and T012 green.
 
 **Checkpoint**: the MVP endpoint works offline end to end.
 
@@ -135,20 +138,22 @@ description: "Task list for Feature 004: Route Plan API"
 - [ ] T021 [US3] Write `tests/integration/api/test_errors.py`, one test per row (status, `error.code`, message substring, `details` keys):
   - malformed JSON body; missing `finish`; `{"lat": 200, "lng": 0}`; unknown field → 400 `invalid_input` naming the field;
   - `start_fuel_gallons: 60`; `corridor_miles: 0.5` and `26`; `reserve_gallons: 26`; `start_fuel_gallons: 4` with `reserve_gallons: 5`; `min_saving_per_stop_usd: 101` → 400 `invalid_input`;
-  - `"Dallas, Texas"` → 400 `location_not_found`, message contains `2-letter state code`; `"Atlantis, TX"` → 400 `location_not_found`;
+  - `"Dallas, Texas"` as `start` → 400 `location_not_found`, message contains `2-letter state code`, `details.field == "start"`; `"Atlantis, TX"` as `finish` → 400 `location_not_found`, `details.field == "finish"`;
   - `{"lat": 19.43, "lng": -99.13}` (Mexico City) and `"Toronto, ON"` → 400 `location_outside_us`;
   - **same location:** `"Dallas, TX"` → `"dallas, tx"` → 400 `same_location`, `osrm.call_count == 0`; lat `32.78004999` vs `32.78005001` (same lng) with respx returning a route of `distance: 0.5` m and 2 identical points → 400 `same_location` (the guard), never 500; two points 1 mile apart with a 1-mile 2-point route → 200 with 0 stops;
   - **422 gap:** load only stations pk 101 (respx full route) → `infeasible_route`, `details.reason == "station gap"`, `gap_start_mile`, `gap_end_mile`, `gap_start`/`gap_end` `{lat, lng}` on the route, `usable_range_miles == 500`;
   - **422 start fuel:** `start_fuel_gallons: 0` → `infeasible_route`, `reason == "start fuel insufficient"`, `start_fuel_gallons`, `reserve_gallons`, `gallons_short` present;
   - **503:** respx `httpx.ReadTimeout` → `routing_unavailable`, `details.reason == "timed out"`, header `Retry-After: 30`; respx 429 with `Retry-After: 2` → header `2`;
-  - **station data missing:** no stations loaded → 503 `station_data_missing`, message contains `loaddata`.
+  - **station data missing:** no stations loaded → 503 `station_data_missing`, message contains `loaddata`;
+  - **place data missing:** `settings.PLACES_INDEX_FILE` pointed at a missing file → 503 `place_data_missing`, message names the file;
+  - **internal error is not bad input:** monkeypatch the service's candidate conversion to return stations out of order (so the optimizer raises `ValueError`) → status 500 (test client with `raise_request_exception=False`), never 400 `invalid_input`.
 
 ### Implementation for User Story 3
 
 - [ ] T022 [US3] In `api/services/route_plan.py`, add `SameLocation` and both checks (research R4): rounded coordinates equal → raise before routing; `route.distance_miles < 0.01` or `cumulative_miles(points)[-1] < 0.01` → raise before `find_candidates`. Catch `InfeasibleRoute` to attach `gap_start`/`gap_end` coordinates via `point_at_mile` (re-raise inside a small `InfeasibleRouteAt` wrapper or return them on the result of the exception; keep the optimizer unchanged).
-- [ ] T023 [US3] In `api/views.py`, complete the error table (research R8): `LocationNotFound`, `LocationOutsideUS`, `SameLocation` → 400; `InfeasibleRoute` → 422 with the details listed in the contract (Decimal values as numbers); `RoutingUnavailable` → 503 with `Retry-After` (`exc.retry_after_seconds` or `settings.ROUTING_RETRY_AFTER_SECONDS`); `StationDataMissing` and `PlaceDataMissing` → 503 `station_data_missing`. Run T021 green.
+- [ ] T023 [US3] In `api/views.py`, complete the error table (research R8): `LocationNotFound`, `LocationOutsideUS`, `SameLocation` → 400; `InfeasibleRoute` → 422 with the details listed in the contract (Decimal values as numbers); `RoutingUnavailable` → 503 with `Retry-After` (`exc.retry_after_seconds` or `settings.ROUTING_RETRY_AFTER_SECONDS`); `StationDataMissing` → 503 `station_data_missing`; `PlaceDataMissing` → 503 `place_data_missing`; `details.field` for the location errors; anything else is left uncaught (500). Run T021 green.
 
-**Checkpoint**: every failure is a documented JSON error; no 500 in any test.
+**Checkpoint**: every failure is a documented JSON error; the only 500 in the tests is the deliberate internal-error case.
 
 ---
 
@@ -204,10 +209,10 @@ description: "Task list for Feature 004: Route Plan API"
 - [ ] T033 Time a first and a cached Dallas → Chicago request (quickstart §7, SC-004); note `meta.timings_ms` and wall clock with the machine.
 - [ ] T034 [P] Create the Postman collection `postman/fuel_route_optimizer.postman_collection.json` (v2.1, `{{base_url}}` variable = `http://localhost:8000`): Dallas → Chicago (City, ST); the same with coordinates; the repeat (cached); **min saving per stop = 5** (description: "drops the 7¢ and 10¢ stops for 17¢ more"); `"Dallas, Texas"` (400); start fuel 0 (422); New York → Los Angeles.
 - [ ] T035 [P] Update `README.md`: status (004 done); "Running the API" (`runserver`, open `/`); the API section from the contract (request fields incl. `reserve_gallons` and `min_saving_per_stop_usd`, response example, precision rule, error table incl. `station_data_missing`); assumptions (coordinates inside the USA within 25 mi of a place, 2-letter states, territories rejected, route cache 24 h per process and stores the route only, min saving per stop off by default and what 5 does on Dallas → Chicago, map line thinned to ~5,000 points); measured timings (T033); the Postman collection.
-- [ ] T036 Check the map page by hand: Dallas, TX → Chicago, IL and New York, NY → Los Angeles, CA render with stops; an unknown city shows the error; the page works at phone width.
+- [ ] T036 Check the map page by hand: Dallas, TX → Chicago, IL and New York, NY → Los Angeles, CA render with stops; an unknown city shows the error (spec US4 scenario 3 is checked only by hand, since the page has no JavaScript test setup by design); the page works at phone width.
 - [ ] T037 [P] Sync `docs/implementation-plan.md` Feature 004 (service in `api/services/` not `planner/services/`, the new modules, the min-saving rule, the precision rule) and tick its "Done when"; add a short "Fewer stops" section to `docs/algorithms/refuelling-greedy.md` (the rule, why only the plan's own stops, the cascade measured in the prototype, the guarantee and its limit).
 - [ ] T038 Quality gate: `python -m pytest --cov=planner --cov=routing --cov=api --cov=stations --cov-report=term-missing` (≥ 90% on `planner/`, `routing/` and `api/`; whole suite green); `ruff check .`; `ruff format --check .`; `python manage.py check`.
-- [ ] T039 Run the full quickstart.md (§1–§7) and confirm no test made a network call.
+- [ ] T039 Run the full quickstart.md (§1–§7) and confirm no test made a network call. Then check SC-006 from a fresh clone in the scratchpad: follow the README setup exactly (venv, `pip install -r requirements-dev.txt`, `cp .env.example .env`, `migrate`, `loaddata stations`, `pytest`), start `runserver` and make one request; no API key, no build step.
 
 ---
 
