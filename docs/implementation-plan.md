@@ -18,7 +18,7 @@ Section 10 maps every requirement, decision, deliverable and test to a feature.
 | Algorithm | Detail document | Decision record |
 | --- | --- | --- |
 | Optimal refuelling (greedy "next cheaper station") | [algorithms/refuelling-greedy.md](algorithms/refuelling-greedy.md) | [ADR-0001](adr/0001-greedy-refuelling-optimizer.md) |
-| Route corridor search (resampling, KD-tree, mile markers) | [algorithms/route-corridor-search.md](algorithms/route-corridor-search.md) | [ADR-0002](adr/0002-kdtree-corridor-search.md) |
+| Route corridor search (densifying, KD-tree, mile markers) | [algorithms/route-corridor-search.md](algorithms/route-corridor-search.md) | [ADR-0002](adr/0002-kdtree-corridor-search.md) |
 | Offline station geocoding (GeoNames city centroids) | [algorithms/station-geocoding.md](algorithms/station-geocoding.md) | [ADR-0003](adr/0003-offline-centroid-geocoding.md) |
 | OSM precision matching (fuzzy name matching) | [algorithms/osm-name-matching.md](algorithms/osm-name-matching.md) | [ADR-0004](adr/0004-osm-fuzzy-name-matching.md) |
 
@@ -126,7 +126,7 @@ Address, City, State, Rack ID, Retail Price`. There are no coordinates.
 | --- | --- | --- | --- |
 | D1 | Fuel in the tank at the start | **Start full** (50 gal), so the cost is the fuel bought en route. `start_fuel_gallons` is optional (default = tank capacity, range 0 to capacity). `total_gallons_consumed` is also returned, so the "start empty" cost can be derived | Constitution VI |
 | D2 | Several prices for one station | **Minimum** price per OPIS ID. Every raw row is kept in `FuelPrice`. The first spelling is used for display | Constitution VI |
-| D11 | Route cache | Django LocMem cache for routing responses, keyed by provider + start/finish rounded to 4 dp, TTL 24 h. Allowed by the **constitution amendment made in Phase 0** (v1.1.0, MINOR): "A bounded in-process cache (Django's built-in LocMem cache) for routing responses is permitted. It must stay optional, must not require external infrastructure, and a cache hit must not change the computed plan." | Constitution VII (amended) |
+| D11 | Route cache | Django LocMem cache for routing responses, keyed by provider + start/finish rounded to 4 dp, TTL 24 h. Production: switch the cache backend to Django's built-in RedisCache (settings change only) so all workers share one route cache. The station index stays in-process. Allowed by the **constitution amendment made in Phase 0** (v1.1.0, MINOR): "A bounded in-process cache (Django's built-in LocMem cache) for routing responses is permitted. It must stay optional, must not require external infrastructure, and a cache hit must not change the computed plan." | Constitution VII (amended) |
 
 ### 4.2 Recommended defaults (confirmed via `/speckit-clarify` for 001/003; already decided in the Specify input for 002/004)
 
@@ -171,7 +171,7 @@ ONE-TIME (management command)            PER REQUEST  POST /api/v1/route-plan/
 fuel CSV                                 1. validate input
  -> clean, drop Canada, group by ID      2. resolve start/finish locally (places index)
  -> GeoNames lookup -> city centroids    3. routing: cache hit, or ONE provider call
- -> places index (committed)             4. resample route, cumulative miles
+ -> places index (committed)             4. densify route, cumulative miles
  -> FuelStation + FuelPrice              5. KD-tree: stations within corridor + mile markers
  -> report + fixture stations.json       6. optimizer: cheapest refuel plan (Decimal)
  -> [stretch] OSM coordinates            7. GeoJSON + totals + timings + meta
@@ -190,9 +190,9 @@ FIRST USE: stations + KD-tree loaded into memory once (lazy, lru_cache)
 | `stations/pipeline/osm.py`, `matching.py` | Overpass fetch with disk cache; name cleaning and fuzzy matching (Feature 005) | No |
 | `stations/services/station_data.py` | Rebuild service: runs the pure pipeline, stores atomically, exports the fixture, place lookup and unmatched file | Yes |
 | `stations/management/commands/build_station_data.py` | Thin: parses flags, calls the rebuild service, prints the report, maps errors to exit codes | Yes |
-| `stations/services/station_index.py` | Station index service: in-memory arrays (ID, coordinates, exact price, name, address, city, state, `geo_source`) + KD-tree, built lazily once; raises `StationDataMissing` when empty | Reads the model once; restart for new data |
+| `stations/services/index_loader.py` | Station index service: in-memory arrays (ID, coordinates, exact price, name, address, city, state, `geo_source`) + KD-tree, built lazily once; raises `StationDataMissing` when empty | Reads the model once; restart for new data |
 | `routing/base.py`, `routing/osrm.py` | `RoutingProvider` protocol, OSRM provider, error mapping | Settings only |
-| `planner/geometry.py`, `planner/corridor.py` | Haversine, resampling, unit vectors, corridor search | No |
+| `planner/geometry.py`, `planner/corridor.py` | Haversine, densifying, unit vectors, corridor search | No |
 | `planner/optimizer.py` | The refuelling algorithm (pure function) | No |
 | `planner/locations.py` | Resolve `"City, ST"` / lat-lng against the places index | No |
 | `planner/services/route_plan.py` | Route-plan service: orchestrates the request path and timings | No |
@@ -562,7 +562,7 @@ missed; a 3,000-mile route with ~6,600 stations is processed in well under 100 m
 
 Decided details (no clarify step needed):
 - The corridor radius may be 1-25 miles.
-- The route is resampled to 1-mile spacing, and at most half the radius.
+- The route is densified so no segment exceeds 1 mile, and at most half the radius (every original point kept).
 - A station near two parts of a looping route takes the earliest mile marker among the route
   points at the minimum distance.
 - Only the free no-key provider ships now; a second provider is a stretch goal.
@@ -583,14 +583,14 @@ and to each read; map timeouts / network errors / 5xx / invalid JSON / code != "
 to RoutingUnavailable; HTTP 429 -> RATE_LIMITED with retry_after_seconds from an integer
 Retry-After header, capped at 60 (missing or HTTP-date -> None); waypoints[].distance > 5 miles
 (8046.72 m) -> NOT_NEAR_ROAD; meters / 1609.344 = miles; GeoJSON [lng, lat] -> LatLng(lat, lng).
-planner/geometry.py (pure numpy): haversine_miles, resample by interpolation, cumulative miles,
+planner/geometry.py (pure numpy): haversine_miles, densify (keep every point, insert interpolated points), cumulative miles,
 to_unit_vectors, chord_for_miles, local equirectangular segment projection.
 planner/corridor.py: find_candidates(route_points, distance_miles, index, corridor_miles) ->
 list[Candidate(opis_id, mile_marker, off_route_miles, price: Decimal)]; radius 1-25 (default
 settings.CORRIDOR_MILES); gather with query_ball_point(chord(r + s/2)), then measure each candidate
 exactly against the segments adjacent to its nearby samples (exact off-route distance and mile
 marker rescaled to the provider distance); include iff off <= r; sort by (mile_marker, opis_id).
-stations/services/station_index.py: lru_cache'd get_station_index() built lazily on first use
+stations/services/index_loader.py: lru_cache'd get_station_index() built lazily on first use
 (never in AppConfig.ready()); holds opis_id, lat, lng, best_price (Decimal), name, address, city,
 state, geo_source + the cKDTree; empty index or missing tables -> StationDataMissing("station data
 not loaded: run python manage.py loaddata stations"); tests reset it with cache_clear(); new

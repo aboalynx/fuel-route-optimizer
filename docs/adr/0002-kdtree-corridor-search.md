@@ -18,9 +18,9 @@ Each request must find which of ~6,600 stations lie within `CORRIDOR_MILES` of a
 
 - Embed station coordinates as 3D unit vectors in a `scipy.spatial.cKDTree`, built lazily once.
 - Per request:
-  1. Resample the route by interpolation to `s = min(1 mi, r/2)`.
+  1. Densify the route: keep every original point and insert interpolated points so no segment is longer than `s = min(1 mi, r/2)`. There is no corner-cutting on curves.
   2. **Gather** candidates with the chord length for `r + s/2`, so no station within `r` is missed.
-  3. **Measure** each candidate exactly. Project it onto the route segments next to its nearby samples, in a local equirectangular frame. That gives the exact off-route distance and the mile marker, rescaled to the provider distance.
+  3. **Measure** each candidate exactly. Project it onto the densified segments adjacent to its nearest point, in a local equirectangular frame. That gives the exact off-route distance and the mile marker, rescaled to the provider distance.
   4. Include a station **if and only if** its exact off-route distance ≤ `r`.
   5. Sort by `(mile_marker, opis_id)`.
 
@@ -34,6 +34,7 @@ Each request must find which of ~6,600 stations lie within `CORRIDOR_MILES` of a
 | BallTree with haversine (scikit-learn) | Correct, but adds a dependency for one function |
 | PostGIS `ST_DWithin` | Breaks the zero-setup run; it is the production path |
 | Per-request Overpass corridor query | A second external call, slow, and no OPIS IDs |
+| Redis for the index, or Redis GEOSEARCH | A round-trip plus deserialization per request, or many per-point calls per route; extra infrastructure. See [research R7](../../specs/002-route-candidates/research.md) |
 
 ## Consequences
 

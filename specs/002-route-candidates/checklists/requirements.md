@@ -39,7 +39,7 @@
   They are acceptance criteria the tests depend on, not implementation choices. The service itself
   is not named in the spec.
 - **No clarify step:** per `docs/implementation-plan.md` Section 7, 002 skips `/speckit-clarify`.
-  Its open points (radius 1–25 mi, 1-mile resampling, loop rule, one provider only) were decided in
+  Its open points (radius 1–25 mi, 1-mile densifying, loop rule, one provider only) were decided in
   the Specify input and are in FR-005, FR-008, FR-011 and FR-012.
 - **Measured by hand:** SC-004 (the timing) and SC-006 (the one real routing call) are recorded in
   the documentation, not asserted in CI.

@@ -1,6 +1,6 @@
 # Algorithm: route corridor search and mile-marker projection
 
-Modules `planner/geometry.py`, `planner/corridor.py`, `stations/services/station_index.py` · Feature 002 · [ADR-0002](../adr/0002-kdtree-corridor-search.md) · [spec](../../specs/002-route-candidates/spec.md)
+Modules `planner/geometry.py`, `planner/corridor.py`, `stations/services/index_loader.py` · Feature 002 · [ADR-0002](../adr/0002-kdtree-corridor-search.md) · [spec](../../specs/002-route-candidates/spec.md)
 
 ## Context
 
@@ -20,23 +20,22 @@ Requirements:
 ## Decision: gather on samples, then measure exactly
 
 ```text
-first use (lazy, lru_cache'd get_station_index(); never in AppConfig.ready()):
+first use (lazy, lru_cache'd get_station_index() in stations/services/index_loader.py; never in AppConfig.ready()):
     index = arrays of opis_id, lat, lng, best_price (Decimal), name, address, city, state, geo_source
     station_tree = cKDTree(unit_vectors(lat, lng))
     empty index (or missing tables) -> raise StationDataMissing
 
 per request:
     s      = min(1 mi, r/2)
-    dense  = resample(polyline, s)                       # interpolate, don't just down-sample
+    dense  = densify(polyline, s)                        # keep every point, insert so no segment > s
     cum    = cumulative haversine miles of dense;  k = D / cum[-1]
     # 1. gather: no station within r can be missed
     hits   = station_tree.query_ball_point(unit_vectors(dense), chord(r + s/2))
     route_tree = cKDTree(unit_vectors(dense))
     # 2. measure each candidate exactly against the route itself
     for station in hits:
-        d0     = distance to its nearest dense point
-        nearby = dense points within d0 + s           # covers loops passing the station twice
-        for each segment (i, i+1) touching a nearby point:
+        i0     = its nearest dense point (ties -> lowest index)
+        for each segment touching i0 ((i0-1, i0) and (i0, i0+1)):
             project the station onto the segment in a local equirectangular frame
             off  = distance from the station to the projected point
             mile = (cum[i] + t * len_i) * k             # t in [0, 1] along the segment
@@ -65,7 +64,8 @@ The station is the origin. Its projection onto segment A→B is
 
 - **3D unit vectors for the gather.** A radius in degrees is wrong: a degree of longitude is ~59 mi
   in Texas and ~47 mi in Montana.
-- **Resampling.** Interstate vertices can be 20+ miles apart.
+- **Densifying, not resampling.** Interstate vertices can be 20+ miles apart, so points are inserted. Every original point is kept, so the densified segments are sub-segments of the real polyline. Replacing the polyline with evenly spaced samples would cut corners: on a 1-mile-radius curve, a 1-mile chord is about 0.125 mi from the road.
+- **Rescale check.** Mile markers are rescaled to the provider distance. If provider distance ÷ geometry length is outside 0.95–1.05, a warning is logged.
 - **Gathering with `r + s/2`.** No station within `r` is missed.
 - **The exact step.** It removes the sampling error. A station on the route reads 0 instead of up to
   `s/2`, and mile markers are exact along the polyline.
@@ -86,7 +86,8 @@ The station is the origin. Its projection onto segment A→B is
 
 - Exact to well under 0.05 mi, in miles at every latitude, deterministic, and fast. The refine step
   touches only a few segments per candidate (a few hundred candidates per route).
-- On a route that loops back, the nearest pass wins, and ties go to the earliest mile marker.
+- On a route that loops back, the nearest pass wins (the nearest densified point), and ties go to the earliest mile marker.
 - The index is built once on first use and holds everything later features need (price, name, address,
   `geo_source`), so the request path never queries the database.
 - New station data needs a process restart (spec FR-013). Tests reset the index with `cache_clear()`.
+- The index is in process memory, not Redis: see [research R7](../../specs/002-route-candidates/research.md).

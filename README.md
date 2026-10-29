@@ -40,13 +40,19 @@ ONE-TIME (management command)            PER REQUEST  POST /api/v1/route-plan/
 fuel CSV                                 1. validate input
  -> clean, drop Canada, group by ID      2. resolve start/finish locally (places index)
  -> GeoNames lookup -> city centroids    3. routing: cache hit, or ONE provider call
- -> places index (committed)             4. resample route, cumulative miles
+ -> places index (committed)             4. densify route, cumulative miles
  -> FuelStation + FuelPrice              5. KD-tree: stations within corridor + mile markers
  -> report + fixture stations.json       6. optimizer: cheapest refuel plan (Decimal)
  -> [stretch] OSM coordinates            7. GeoJSON + totals + timings + meta
 
 FIRST USE: stations + KD-tree loaded into memory once (lazy, lru_cache)
 ```
+
+**Why in memory?** The station index is small (6,620 stations, about 1–2 MB) and read-only, and it
+needs an in-memory spatial index (a KD-tree) to find the stations along a route quickly. Each server
+process therefore holds its own copy, built once on first use, and a search never queries the
+database. Redis was considered and rejected for this: every request would pay a network round-trip
+plus deserialization, and it adds infrastructure a reviewer would have to run.
 
 ## Tech stack
 
@@ -240,4 +246,5 @@ any part of it.
 - A truck routing profile
 - A minimum saving per extra stop (a purely cost-optimal plan can add a nearby stop for a small saving)
 - Mark 3.15 as officially supported once Django 6.1.3 is released.
+- Shared Redis route cache for multi-worker deployments (Django's built-in RedisCache backend, a settings change only). With LocMem each worker has its own cache.
 - A station-data version marker, checked at most once every N seconds, if station data ever needs to change while the server runs (today a restart is required).
