@@ -13,7 +13,7 @@ Content-Type: application/json
 
 Optional fields: `start_fuel_gallons` (0..capacity, default full), `corridor_miles` (1..25, default
 10), `reserve_gallons` (0..25, default 0), `min_saving_per_stop_usd` (0..100, default 0 = off).
-`start` and `finish` may also be `{"lat": 32.78, "lng": -96.80}`. Unknown fields → 400.
+`start` and `finish` may also be `{"lat": 32.78, "lng": -96.80}`; then `name` in the response is the nearest place (e.g. `"Dallas, TX"`). Unknown fields → 400.
 
 ### 200 response
 
@@ -66,15 +66,15 @@ Body: `{"error": {"code": "...", "message": "...", "details": {...}}}`.
 
 | Status | `code` | When | `details` |
 | --- | --- | --- | --- |
-| 400 | `invalid_input` | Malformed JSON, missing/unknown fields, out-of-range values, start fuel above capacity, reserve not below capacity, start fuel below reserve | `{"fields": {"<field>": ["<message>"]}}` |
+| 400 | `invalid_input` | Malformed JSON, missing/unknown fields, out-of-range values, start fuel above capacity, reserve not below capacity, start fuel below reserve | `{"fields": {"<field>": ["<message>"]}}`; vehicle-dependent checks also give `"field"` |
 | 400 | `location_not_found` | Unknown city, or the state is not a 2-letter code | `{"field": "start"\|"finish", "query": "..."}` |
 | 400 | `location_outside_us` | Coordinates > 25 mi from any US place, or a non-US state/territory code | `{"field", "query"}` |
 | 400 | `same_location` | Same point after rounding to 4 dp, or a route shorter than 0.01 mi | `{"start", "finish"}` |
 | 422 | `infeasible_route` | Station gap, or start fuel too low | `{"reason", "gap_start_mile", "gap_end_mile", "gap_start": {lat, lng}, "gap_end": {lat, lng}, "usable_range_miles"}` plus, for start fuel, `"start_fuel_gallons", "reserve_gallons", "gallons_short"` |
 | 503 | `routing_unavailable` | Routing timeout, network/server error, rate limit, invalid response, no route, not near a road | `{"reason"}`; header `Retry-After` (provider's value, else 30) |
 | 503 | `station_data_missing` | Station data not loaded (message says to run `loaddata stations`) | `{}` |
-| 503 | `place_data_missing` | The committed place file `data/places/us_places.csv.gz` is missing or empty | `{}` |
-| 500 | (Django default) | An unexpected internal error; never reported as `invalid_input` | — |
+| 503 | `place_data_missing` | The committed place file is missing or unreadable; message "place data missing: data/places/us_places.csv.gz (restore it from git or rebuild with python manage.py build_station_data)" | `{}` |
+| 500 | `internal_error` | Any other failure (a bug). Message "internal error"; the traceback is logged, never returned | `{}` |
 
 ## `GET /api/v1/route-plan/` (optional, first to drop)
 

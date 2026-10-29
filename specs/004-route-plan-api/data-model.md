@@ -20,7 +20,7 @@ No database tables. Value types live in pure modules; the HTTP shapes are in
 | `tree` | `cKDTree` | Unit vectors of the places |
 
 `load_place_index(path)` reads `data/places/us_places.csv.gz`; an empty or missing file raises
-`PlaceDataMissing`.
+`PlaceDataMissing` (also for an unreadable file), whose message is "place data missing: data/places/us_places.csv.gz (restore it from git or rebuild with python manage.py build_station_data)".
 
 ### `ResolvedLocation` (frozen dataclass)
 
@@ -28,7 +28,7 @@ No database tables. Value types live in pure modules; the HTTP shapes are in
 | --- | --- | --- |
 | `query` | `str` | The input string, or `"lat,lng"` for coordinates |
 | `lat`, `lng` | `float` | The place's coordinates for a city; the input for coordinates |
-| `place_name` | `str \| None` | `"Dallas, TX"` style display name, if resolved from a name; returned as `name` in the response (null for coordinates) |
+| `place_name` | `str \| None` | `"Dallas, TX"` style display name, if resolved from a name; returned as `name` in the response; for coordinates, the display name of the nearest place found by the inside-the-USA check |
 
 ### Errors
 
@@ -75,9 +75,9 @@ over the other stops costs that much more) or cannot be removed (re-planning is 
 stops); `stop_points: dict[int, tuple[float, float]]` (station lat/lng); `off_route_miles:
 dict[int, float]`; `vehicle` (mpg, range, capacity); `timings_ms: dict[str, int]`.
 
-### `InvalidInput(field, message)`
+### `InvalidPlanInput(field, message)`
 
-Raised by the service for request values that depend on the vehicle (research R8); mapped to 400 `invalid_input` with `details.fields = {field: [message]}`.
+Raised by the service for request values that depend on the vehicle (research R8); mapped to 400 `invalid_input` with `details = {"field": field, "fields": {field: [message]}}`.
 
 ### `SameLocation(query_start, query_finish, reason)`
 

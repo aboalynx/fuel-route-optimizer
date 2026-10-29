@@ -46,7 +46,8 @@ spec's clarifications (stop-saving default 0, output precision, same location) a
     on 3D unit vectors of the ~31,500 places, queried with the chord for 25 miles
     (`planner.geometry.chord_for_miles`). Else `location_outside_us`.
   - The resolved location keeps the original `query` (the string, or `"lat,lng"`), `lat`, `lng`,
-    and for a city its display name and state.
+    and a display name: the matched place for a city, the nearest place (from the 25-mile check)
+    for coordinates.
 - **Rationale:** reuses the pipeline's exact name rules and data (constitution VIII: no geocoding
   call); one KD-tree query is microseconds.
 - **Alternatives considered:** fuzzy matching of user input (a typo would silently resolve to
@@ -127,23 +128,23 @@ spec's clarifications (stop-saving default 0, output precision, same location) a
 
 - **Decision:** `ErrorCode` `StrEnum` in `api/enums.py` (Django-free): `INVALID_INPUT`,
   `LOCATION_NOT_FOUND`, `LOCATION_OUTSIDE_US`, `SAME_LOCATION`, `INFEASIBLE_ROUTE`,
-  `ROUTING_UNAVAILABLE`, `STATION_DATA_MISSING`, `PLACE_DATA_MISSING`. One mapping table in `api/views.py`:
+  `ROUTING_UNAVAILABLE`, `STATION_DATA_MISSING`, `PLACE_DATA_MISSING`, `INTERNAL_ERROR`. One mapping table in `api/views.py`:
 
   | Exception | Status | Code |
   | --- | --- | --- |
-  | serializer `ValidationError`; `InvalidInput(field, message)` from the service | 400 | `invalid_input` |
+  | serializer `ValidationError`; `InvalidPlanInput(field, message)` from the service (`details.field`) | 400 | `invalid_input` |
   | `LocationNotFound` | 400 | `location_not_found` |
   | `LocationOutsideUS` | 400 | `location_outside_us` |
   | `SameLocation` | 400 | `same_location` |
   | `InfeasibleRoute` | 422 | `infeasible_route` |
   | `RoutingUnavailable` | 503 + `Retry-After` | `routing_unavailable` |
   | `StationDataMissing` | 503 | `station_data_missing` |
-  | `PlaceDataMissing` | 503 | `place_data_missing` (message names `data/places/us_places.csv.gz`) |
-  | anything else (incl. `ValueError`/`TypeError` from the core) | 500 | not caught: a bug, logged by Django |
+  | `PlaceDataMissing` (file missing or unreadable) | 503 | `place_data_missing`, message "place data missing: data/places/us_places.csv.gz (restore it from git or rebuild with python manage.py build_station_data)" |
+  | anything else (incl. `ValueError`/`TypeError` from the core) | 500 | `internal_error`, message "internal error"; `logger.exception(...)` logs the traceback; no exception text in the body |
 
   The service checks the request values that depend on the vehicle **before** calling the
   optimizer (start fuel ≤ capacity, reserve < capacity, start fuel ≥ reserve) and raises
-  `InvalidInput(field, message)`. So a `ValueError` from the optimizer can only mean a server bug
+  `InvalidPlanInput(field, message)`. So a `ValueError` from the optimizer can only mean a server bug
   (for example unsorted stations) and must not be reported to the client as bad input.
   `LocationNotFound` and `LocationOutsideUS` carry `field` (`"start"`/`"finish"`), set by the
   service, which the view puts in `details`.
