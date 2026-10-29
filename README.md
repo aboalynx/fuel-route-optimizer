@@ -89,6 +89,9 @@ rewrites three committed files, which come out byte-for-byte identical on every 
 `--min-geocoded-pct` (default 95), it prints the report, writes the unmatched file and changes
 nothing else. The shipped data was built with the default threshold of 95%.
 
+After `build_station_data` or `loaddata`, restart the server to pick up the new station data.
+(`runserver` does not reload on data changes, only on code changes.)
+
 **Measured on a 2018 MacBook Pro (Intel i7-8750H, Python 3.15.2):** full rebuild 11.0 s, and
 `loaddata stations` into a fresh database 10.1 s.
 
@@ -237,3 +240,4 @@ any part of it.
 - A truck routing profile
 - A minimum saving per extra stop (a purely cost-optimal plan can add a nearby stop for a small saving)
 - Mark 3.15 as officially supported once Django 6.1.3 is released.
+- A station-data version marker, checked at most once every N seconds, if station data ever needs to change while the server runs (today a restart is required).
