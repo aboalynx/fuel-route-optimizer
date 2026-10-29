@@ -1,8 +1,9 @@
 """Corridor search: the stations within a radius of a route, with exact mile markers (pure).
 
 1. Densify the route: keep every point, insert points so no segment exceeds s = min(1, r/2).
-2. Gather candidates with a KD-tree ball query on the densified points (radius r + s/2), so no
-   station within r is missed.
+2. Gather candidates: one vectorized nearest-neighbour query of every station against a KD-tree
+   of the densified points, bounded at r + s/2, so no station within r is missed. (Querying from
+   the ~6,600 stations is much faster than a ball query from ~10 route points per mile.)
 3. Measure each candidate exactly: project it onto the densified segments next to its nearest
    point (all nearest points on ties), keep the closest projection, earliest mile on ties.
 4. Include it if and only if its exact off-route distance is <= r.
@@ -58,17 +59,20 @@ def find_candidates(route: Route, index: StationIndex, corridor_miles: float) ->
     cumulative = cumulative_miles(points)
     scale = _scale(route.distance_miles, cumulative[-1])
 
-    vectors = to_unit_vectors(points[:, 0], points[:, 1])
-    hits = index.tree.query_ball_point(vectors, chord_for_miles(radius + spacing / 2))
-    candidates_idx = sorted({i for row in hits for i in row})
-    if not candidates_idx:
-        return []
-
-    route_tree = cKDTree(vectors)
+    route_tree = cKDTree(to_unit_vectors(points[:, 0], points[:, 1]))
+    nearest_chords, _ = route_tree.query(
+        index.vectors, distance_upper_bound=chord_for_miles(radius + spacing / 2)
+    )
     found = []
-    for j in candidates_idx:
+    for j in np.nonzero(np.isfinite(nearest_chords))[0]:
         off, mile = _measure(
-            index.lat[j], index.lng[j], index.vectors[j], points, cumulative, route_tree
+            index.lat[j],
+            index.lng[j],
+            index.vectors[j],
+            nearest_chords[j],
+            points,
+            cumulative,
+            route_tree,
         )
         if off <= radius:
             info = index.info[j]
@@ -92,9 +96,8 @@ def _scale(provider_miles: float, geometry_miles: float) -> float:
     return scale
 
 
-def _measure(lat, lng, vector, points, cumulative, route_tree) -> tuple[float, float]:
+def _measure(lat, lng, vector, nearest_chord, points, cumulative, route_tree):
     """Exact (off-route miles, mile along the geometry) for one station."""
-    nearest_chord, _ = route_tree.query(vector)
     nearest = route_tree.query_ball_point(vector, nearest_chord * (1 + 1e-9) + 1e-15)
     last = len(points) - 1
     best = (math.inf, math.inf)

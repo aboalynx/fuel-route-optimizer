@@ -34,20 +34,30 @@ def densify(points: np.ndarray, spacing: float) -> np.ndarray:
     longer than `spacing`. The result is the same polyline with extra vertices, so curves are
     never cut."""
     points = np.asarray(points, dtype=float)
-    pieces = [points[:1]]
-    for a, b in zip(points[:-1], points[1:], strict=True):
-        length = haversine_miles(*a, *b)
-        parts = max(1, math.ceil(length / spacing))
-        while True:
-            t = np.linspace(0.0, 1.0, parts + 1)[1:, None]
-            inserted = a + (b - a) * t
-            inserted[-1] = b  # keep the original point bit for bit
-            chain = np.vstack([a, inserted])
-            if segment_miles(chain).max(initial=0.0) <= spacing + 1e-9:
-                break
-            parts += 1  # equal lat/lng steps are not always equal miles
-        pieces.append(inserted)
+    if len(points) < 2:
+        return points.copy()
+    # Real routes have ~10 points per mile, so only a few segments need extra points: measure
+    # all segments at once and loop only over the long ones.
+    long_segments = np.nonzero(segment_miles(points) > spacing)[0]
+    pieces, start = [], 0
+    for i in long_segments:
+        pieces.append(points[start : i + 1])  # original points up to and including point i
+        pieces.append(_interior_points(points[i], points[i + 1], spacing))
+        start = i + 1
+    pieces.append(points[start:])
     return np.vstack(pieces)
+
+
+def _interior_points(a: np.ndarray, b: np.ndarray, spacing: float) -> np.ndarray:
+    """Points strictly between a and b so that no sub-segment is longer than spacing."""
+    parts = max(2, math.ceil(haversine_miles(*a, *b) / spacing))
+    while True:
+        t = np.linspace(0.0, 1.0, parts + 1)[:, None]
+        chain = a + (b - a) * t
+        chain[0], chain[-1] = a, b  # keep the original points bit for bit
+        if segment_miles(chain).max() <= spacing + 1e-9:
+            return chain[1:-1]
+        parts += 1  # equal lat/lng steps are not always equal miles
 
 
 def cumulative_miles(points: np.ndarray) -> np.ndarray:
