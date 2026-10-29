@@ -1,6 +1,7 @@
-"""POST /api/v1/route-plan/: parse, call the service, format, map errors (no logic here)."""
+"""POST (and GET) /api/v1/route-plan/: parse, call the service, format, map errors."""
 
 import logging
+import re
 
 from django.conf import settings
 from rest_framework.response import Response
@@ -25,9 +26,24 @@ from routing.base import RoutingUnavailable
 logger = logging.getLogger(__name__)
 
 
+COORDINATES = re.compile(r"^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$")
+
+
 class RoutePlanView(APIView):
     def post(self, request):
-        serializer = RoutePlanRequestSerializer(data=request.data)
+        return self.plan(request.data)
+
+    def get(self, request):
+        """Optional GET form: the same fields as query parameters, "lat,lng" for coordinates."""
+        data = dict(request.query_params.items())
+        for side in ("start", "finish"):
+            match = COORDINATES.match(data.get(side, ""))
+            if match:
+                data[side] = {"lat": float(match[1]), "lng": float(match[2])}
+        return self.plan(data)
+
+    def plan(self, data) -> Response:
+        serializer = RoutePlanRequestSerializer(data=data)
         serializer.is_valid(raise_exception=True)
         try:
             result = plan_route(RoutePlanInput(**serializer.validated_data))

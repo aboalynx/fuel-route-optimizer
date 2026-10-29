@@ -200,8 +200,8 @@ description: "Task list for Feature 004: Route Plan API"
 
 **Goal**: the same request as query parameters (FR-013). **Drop this phase first if time is short.**
 
-- [ ] T030 [P] [US5] Write `tests/integration/api/test_get.py`: `GET /api/v1/route-plan/?start=Dallas,%20TX&finish=Chicago,%20IL` → 200 with the same `summary` and `fuel_stops` as the POST; `start=32.78,-96.80` coordinates form; a bad parameter → 400 `invalid_input`.
-- [ ] T031 [US5] Add `RoutePlanView.get`: map query parameters to the serializer input (`"lat,lng"` strings → `{lat, lng}`), then the same path as `post`. Run T030 green.
+- [X] T030 [P] [US5] Write `tests/integration/api/test_get.py`: `GET /api/v1/route-plan/?start=Dallas,%20TX&finish=Chicago,%20IL` → 200 with the same `summary` and `fuel_stops` as the POST; `start=32.78,-96.80` coordinates form; a bad parameter → 400 `invalid_input`.
+- [X] T031 [US5] Add `RoutePlanView.get`: map query parameters to the serializer input (`"lat,lng"` strings → `{lat, lng}`), then the same path as `post`. Run T030 green.
 
 ---
 
