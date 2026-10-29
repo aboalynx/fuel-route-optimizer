@@ -76,7 +76,9 @@ the choices made on top of it.
   mile_marker: Decimal, price_usd_per_gallon: Decimal)`. Feature 004's request service converts
   each 002 `Candidate` (float `mile_marker`, possibly `np.float64`) with
   `Decimal(float(m)).quantize(Decimal("0.001"))`, and the route distance the same way, clamping a
-  marker that rounds above the distance down to it.
+  marker that rounds above the distance down to it, then re-sorts by `(mile_marker, opis_id)`: two
+  markers less than 0.0005 mi apart can otherwise quantize to the same mile in descending ID order
+  and be rejected as unsorted.
 - **Rationale:** the core stays independent of numpy floats and of the corridor module, and every
   number entering the money maths is an explicit `Decimal` (constitution V). 0.001 mi (~5 ft) is far
   below the corridor accuracy (0.05 mi).
@@ -88,7 +90,9 @@ the choices made on top of it.
 - **Decision:** `tests/unit/planner/oracle.py`: a DP over (station, whole fuel units) on small
   integer instances: integer mile markers, integer prices, `mpg = 1` (one unit = one gallon = one
   mile), range 5–15, 0–8 stations, route length up to 40. About 50 cases from `random.Random(seed)`
-  with fixed seeds. The test asserts that `plan.total_cost_usd` equals the oracle's cost (with
+  with fixed seeds. The cost check uses the first 50 seeds whose optimum is above $0 (seeds 0–122),
+  so every case exercises the buying rules; the feasibility check uses seeds 0–49, a mix of
+  feasible and infeasible trips. The test asserts that `plan.total_cost_usd` equals the oracle's cost (with
   integer prices and whole gallons every cost is a whole number of dollars, so cent rounding cannot
   hide a difference), and that both agree on feasibility.
 - **Rationale:** with integer distances and mpg 1, an optimal plan exists that buys whole units at
