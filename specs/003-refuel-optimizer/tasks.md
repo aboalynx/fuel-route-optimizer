@@ -29,7 +29,7 @@ description: "Task list for Feature 003: Refuel Optimizer"
 - [ ] T001 Write the test oracle `tests/unit/planner/oracle.py` (research R6) and its own sanity tests in `tests/unit/planner/test_oracle.py`:
   - `oracle_cost(distance: int, stations: list[tuple[int, int, int]], capacity: int, start_fuel: int) -> int | None` where each station is `(opis_id, mile, price)`, `mpg = 1` (one unit = one gallon = one mile). It returns the minimum total cost, or `None` when no plan exists;
   - a DP over (node index, whole fuel units on arrival), buying whole units only at stations, never above `capacity`, never below 0;
-  - `random_instance(rng: random.Random) -> (distance, stations, capacity, start_fuel)` with range 5–15, 0–8 stations, distance ≤ 40, integer prices 1–9, stations sorted by `(mile, opis_id)`, and `0 ≤ mile ≤ distance`;
+  - `random_instance(rng: random.Random) -> (distance, stations, capacity, start_fuel)` with range 5–15, 0–8 stations, distance ≤ 40, integer prices 1–9, start fuel `0..capacity`, unique station IDs `1..n`, stations sorted by `(mile, opis_id)`, and `0 ≤ mile ≤ distance`;
   - sanity tests (hand-checked): a trip within the start fuel → 0; one station needed → the exact cost; a gap longer than `capacity` → `None`; start fuel 0 with a station at mile 0 → feasible.
 
 ---
@@ -67,8 +67,10 @@ description: "Task list for Feature 003: Refuel Optimizer"
   - **Buy only enough to finish** (destination-sentinel regression): the finish is in range and no cheaper station precedes it → the last purchase leaves exactly 0 gal at the finish, never a full tank.
   - **Tie rule:** two equally cheapest stations at miles 200 and 300 → the plan goes to 300; two equally cheapest at the same mile → the lower `opis_id`; an equal price is never treated as cheaper.
   - **Exact money:** a price of `Decimal("3.00733333")` → `cost_usd == round_cents(gallons × price)`; `total_cost_usd == sum(p.cost_usd for p in purchases)` on a multi-stop plan where rounding each stop differs from rounding the exact total.
-  - **Invariants** on every feasible case in this file: `start + gallons_purchased − fuel_left == gallons_consumed` exactly; `gallons_consumed == distance / mpg`; tank never above 50 or below 0 at any node; purchases in route order with `gallons > 0`.
+  - **Invariants** on every feasible case in this file: `start + gallons_purchased − fuel_left == gallons_consumed` exactly; `gallons_consumed == distance / mpg`; tank never above 50 or below 0 at any node; no leg between consecutive fuel points (start, stops, finish) longer than 500 mi; purchases in route order with `gallons > 0`.
   - **Start fuel 0** with a station at mile 0 → feasible, first purchase at mile 0.
+  - **Default start fuel:** omitting `start_fuel_gallons` gives a plan equal to passing `Decimal(50)`.
+  - **Station at the finish mile:** a cheap station exactly at mile D gets no purchase, and the truck arrives with 0 gal.
   - **Determinism:** two calls with the same input return equal `FuelPlan`s.
 - [ ] T005 [P] [US1] Write `tests/unit/planner/test_oracle_agreement.py` (pure): for seeds `0..49`, build `random_instance(random.Random(seed))`; when `oracle_cost` is not `None`, call `plan_refuelling` with `mpg=Decimal(1)`, `max_range_miles=Decimal(capacity)`, `start_fuel_gallons=Decimal(start_fuel)` and integer `Decimal` miles and prices, and assert `plan.total_cost_usd == Decimal(oracle_cost)`. Parametrize by seed so a failure names it.
 
@@ -126,7 +128,7 @@ description: "Task list for Feature 003: Refuel Optimizer"
   - reserve 5 on a multi-stop route → no leg between consecutive fuel points (start, each stop, finish) is longer than 450 mi; the tank never drops below 5 gal; `fuel_left_gallons ≥ 5`; fuel balance still exact;
   - reserve 5 with stations 470 mi apart → `STATION_GAP` with `usable_range_miles == 450`, while the same input with reserve 0 is feasible;
   - start fuel 4 with reserve 5 → `ValueError` (invalid input, not infeasible);
-  - reserve `< 0`, `> 25`, or `≥ capacity` → `ValueError`; a float reserve → `TypeError`;
+  - reserve `< 0`, `> 25`, or `≥ capacity` (e.g. reserve 20 with `max_range_miles=150`, capacity 15) → `ValueError`; a float reserve → `TypeError`;
   - reserve 0 gives a `FuelPlan` equal to the call without the argument (several inputs from `test_optimizer.py`).
 
 ### Implementation for User Story 3
@@ -145,7 +147,7 @@ description: "Task list for Feature 003: Refuel Optimizer"
   - assumptions (constitution VI): the vehicle starts with a full tank unless told otherwise; no safety reserve by default, so the range is the brief's 500 miles (a production default of 5 gal would be sensible; the reserve is an option); each stop's cost is rounded half up to cents and the total is the sum of the rounded stops; prices are never rounded before multiplying; detour fuel is ignored;
   - in "How it works", two sentences on the greedy (buy just enough to reach a cheaper station, else fill up) with a link to `docs/algorithms/refuelling-greedy.md`;
   - the measured timing and machine from T012.
-- [ ] T014 [P] Sync the docs: in `docs/algorithms/refuelling-greedy.md`, replace "Rounding: only at the API boundary" with "rounding happens once, when the plan is built (the money output); the API only formats" and mention fuel tracked in miles of range and the infeasible detail fields; in `docs/implementation-plan.md` Feature 003, sync the module/test names if they changed and tick "Done when".
+- [ ] T014 [P] Sync the docs: in `docs/algorithms/refuelling-greedy.md`, replace "Rounding: only at the API boundary" with "rounding happens once, when the plan is built (the money output); the API only formats" and mention fuel tracked in miles of range and the infeasible detail fields; in it and in `docs/adr/0001-greedy-refuelling-optimizer.md`, replace "under 1 ms" with the time measured in T012; in `docs/implementation-plan.md` Feature 003, sync the module/test names if they changed and tick "Done when".
 - [ ] T015 Quality gate:
   - `python -m pytest --cov=planner --cov-report=term-missing` → `planner/optimizer.py` ≥ 95% (SC-007), whole suite green;
   - `ruff check .` and `ruff format --check .`;

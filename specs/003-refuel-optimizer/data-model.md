@@ -55,7 +55,7 @@ Any rule broken → `ValueError` (a non-`Decimal` number → `TypeError`). Featu
 | `fuel_left_gallons` | `Decimal` | ≥ reserve; `start + purchased − left = consumed` exactly |
 
 **Invariants (tested):**
-- fuel balance holds exactly;
+- fuel balance holds exactly at the default mpg (10); within 1e-20 gal for an mpg that does not divide a power of ten (research R2);
 - the tank never exceeds capacity nor drops below the reserve at any node;
 - no leg between consecutive fuel points (start, stops, finish) is longer than the usable range;
 - the same input gives an equal `FuelPlan`.
