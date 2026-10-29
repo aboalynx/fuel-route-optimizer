@@ -89,6 +89,7 @@ def test_summary_precision_and_totals(result):
     assert summary["stops_count"] == len(stops)
     assert summary["stops_dropped"] == 0
     assert summary["extra_cost_vs_cheapest_usd"] == D("0.00")
+    assert summary["minimum_possible_cost_usd"] == summary["total_fuel_cost_usd"]
     assert summary["assumptions"] == {
         "mpg": D(10),
         "max_range_miles": D(500),

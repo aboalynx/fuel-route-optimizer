@@ -75,7 +75,7 @@ def test_defaults_and_options_are_echoed(client, route_stations, osrm):
         "start_fuel_gallons": 50,
         "corridor_miles": 10,
         "reserve_gallons": 0,
-        "min_saving_per_stop_usd": 0,
+        "min_saving_per_stop_usd": 5,
     }
     options = {
         "start_fuel_gallons": 40,
@@ -116,11 +116,14 @@ def test_later_requests_query_no_station_data(
 
 
 def test_min_saving_per_stop_is_reported(client, route_stations, osrm):
-    plain = post(client, TRIP).json()["summary"]
+    plain = post(client, {**TRIP, "min_saving_per_stop_usd": 0}).json()["summary"]
     assert (plain["stops_dropped"], plain["extra_cost_vs_cheapest_usd"]) == (0, 0)
+    assert plain["minimum_possible_cost_usd"] == plain["total_fuel_cost_usd"]
 
-    summary = post(client, {**TRIP, "min_saving_per_stop_usd": 5}).json()["summary"]
+    summary = post(client, TRIP).json()["summary"]  # the default is 5
+    assert summary == post(client, {**TRIP, "min_saving_per_stop_usd": 5}).json()["summary"]
     assert summary["assumptions"]["min_saving_per_stop_usd"] == 5
+    assert summary["minimum_possible_cost_usd"] == plain["total_fuel_cost_usd"]
     extra = Decimal(str(summary["extra_cost_vs_cheapest_usd"]))
     difference = Decimal(str(summary["total_fuel_cost_usd"])) - Decimal(
         str(plain["total_fuel_cost_usd"])

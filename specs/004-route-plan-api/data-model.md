@@ -66,7 +66,7 @@ over the other stops costs that much more) or cannot be removed (re-planning is 
 
 `start`, `finish` (each `str` or `(lat, lng)`), `start_fuel_gallons: Decimal | None`,
 `corridor_miles: Decimal` (default `CORRIDOR_MILES`), `reserve_gallons: Decimal` (0),
-`min_saving_per_stop_usd: Decimal` (0).
+`min_saving_per_stop_usd: Decimal` (5).
 
 ### `RoutePlanResult` (frozen dataclass)
 
@@ -91,7 +91,7 @@ Raised before routing (rounded coordinates equal) or after (route < 0.01 mi).
 | `start_fuel_gallons` | decimal | 0..capacity | full tank |
 | `corridor_miles` | decimal | 1..25 | `CORRIDOR_MILES` (10) |
 | `reserve_gallons` | decimal | 0..25, < capacity, ≤ start fuel | 0 |
-| `min_saving_per_stop_usd` | decimal | 0..100 | 0 |
+| `min_saving_per_stop_usd` | decimal | 0..100 | `DEFAULT_MIN_SAVING_PER_STOP_USD` (5) |
 
 Unknown fields are rejected (`invalid_input`) so a typo such as `min_saving_usd` is not silently ignored.
 

@@ -809,7 +809,7 @@ and a small station fixture.
 **As built (2026-10-30), changes from the inputs above:**
 
 - The request service is `api/services/route_plan.py` (the `api` app's services, per the constitution), not `planner/services/`; the place lookup is `planner/locations.py` + `api/services/places.py`; the route cache is `routing/cached.py`.
-- New: `min_saving_per_stop_usd` (0–100, default 0 = off), `planner/fewer_stops.py`, see the algorithm doc's "Fewer stops".
+- New: `min_saving_per_stop_usd` (0–100, default 5 USD; 0 = the cheapest plan) and `minimum_possible_cost_usd` in the summary, `planner/fewer_stops.py`, see the algorithm doc's "Fewer stops". The default was 0 at first and changed to 5 after the map showed the pure optimum is impractical (New York → Los Angeles: 16 stops vs 6 for 1% more).
 - D10 precision: money 2 dp, gallons 4 dp, price exact as stored; `fuel_left_gallons` and `name` in the response.
 - Errors: `invalid_input` also for start fuel/reserve that do not fit the tank (`details.field`), `place_data_missing` (503) and `internal_error` (500, never leaks the exception).
 - Same location: 4-dp rounding before routing, plus a guard for routes shorter than 0.01 mile.

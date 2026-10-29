@@ -58,7 +58,8 @@ short):
 
 ## Fewer stops (optional, Feature 004)
 
-`planner/fewer_stops.py` · request field `min_saving_per_stop_usd` (0–100, default 0 = off).
+`planner/fewer_stops.py` · request field `min_saving_per_stop_usd` (0–100, default 5; 0 = the
+cheapest plan, whose cost every response returns as `minimum_possible_cost_usd`).
 
 The greedy minimises fuel cost only, so it can stop for 1.3 gallons to save 10 cents. With a
 threshold `X > 0`:

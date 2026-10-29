@@ -1,7 +1,8 @@
 # Research: Route Plan API (004)
 
 Every decision below resolves the Technical Context; nothing is left as NEEDS CLARIFICATION. The
-spec's clarifications (stop-saving default 0, output precision, same location) are inputs here.
+spec's clarifications (stop-saving default, output precision, same location) are inputs here. The
+stop-saving default changed from 0 to 5 USD on 2026-10-30 (spec Clarifications); R6 below.
 
 ## R1. Layering: pure core, thin Django
 
@@ -103,8 +104,9 @@ spec's clarifications (stop-saving default 0, output precision, same location) a
 - **Decision:** `plan_with_min_saving(distance_miles, stations, *, min_saving_usd, **vehicle)
   -> FewerStopsResult(plan, cheapest, stops_dropped)` in `planner/fewer_stops.py`:
   1. `cheapest = plan_refuelling(...)` over all stations (raises `InfeasibleRoute` as before).
-  2. If `min_saving_usd == 0`, return `cheapest` unchanged (spec: default response is the
-     oracle-checked plan).
+  2. If `min_saving_usd == 0`, return `cheapest` unchanged (the oracle-checked plan).
+  - **Default (2026-10-30):** the API defaults to 5 USD (`DEFAULT_MIN_SAVING_PER_STOP_USD`);
+    `cheapest` is always computed anyway, so `minimum_possible_cost_usd` costs no extra call.
   3. Otherwise `keep` = the stations of the current plan's stops. For each stop, re-plan over
      `keep` minus that station; skip it if infeasible; `saving = alt.total − current.total`.
      Take the smallest by `(saving, mile_marker, opis_id)`; if `saving < min_saving_usd`, adopt

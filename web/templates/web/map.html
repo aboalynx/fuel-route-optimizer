@@ -61,8 +61,8 @@
         <input id="corridor_miles" name="corridor_miles" type="number" min="1" max="25" step="any">
         <label for="reserve_gallons">Safety reserve (gallons, default 0)</label>
         <input id="reserve_gallons" name="reserve_gallons" type="number" min="0" max="25" step="any">
-        <label for="min_saving_per_stop_usd">Minimum saving per stop (USD, default 0 = off)</label>
-        <input id="min_saving_per_stop_usd" name="min_saving_per_stop_usd" type="number" min="0" max="100" step="any">
+        <label for="min_saving_per_stop_usd">Minimum saving per stop (USD; 0 = cheapest plan)</label>
+        <input id="min_saving_per_stop_usd" name="min_saving_per_stop_usd" type="number" min="0" max="100" step="any" value="5">
       </details>
       <button type="submit" id="submit">Plan route</button>
     </form>
@@ -151,8 +151,11 @@
     row(list, "From", plan.start.name || plan.start.query);
     row(list, "To", plan.finish.name || plan.finish.query);
     row(list, "Distance", `${Number(s.distance_miles).toFixed(1)} mi`);
-    row(list, "Total fuel cost", usd(s.total_fuel_cost_usd));
-    row(list, "Stops", s.stops_dropped ? `${s.stops_count} (${s.stops_dropped} dropped, +${usd(s.extra_cost_vs_cheapest_usd)})` : `${s.stops_count}`);
+    const cheapestStops = s.stops_count + s.stops_dropped;
+    row(list, "Total fuel cost", s.stops_dropped
+      ? `${usd(s.total_fuel_cost_usd)} (cheapest possible ${usd(s.minimum_possible_cost_usd)} with ${cheapestStops} stops)`
+      : usd(s.total_fuel_cost_usd));
+    row(list, "Stops", `${s.stops_count}`);
     row(list, "Gallons bought", `${s.gallons_purchased}`);
     row(list, "Routing calls", `${plan.meta.routing_calls}${plan.meta.cached ? " (cached)" : ""}`);
     row(list, "Total time", `${plan.meta.timings_ms.total} ms`);

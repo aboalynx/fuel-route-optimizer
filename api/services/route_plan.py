@@ -72,7 +72,7 @@ class RoutePlanInput:
     start_fuel_gallons: Decimal | None = None  # None: a full tank
     corridor_miles: Decimal = Decimal(10)
     reserve_gallons: Decimal = Decimal(0)
-    min_saving_per_stop_usd: Decimal = Decimal(0)
+    min_saving_per_stop_usd: Decimal = Decimal(5)  # the API default; 0 = the cheapest plan
 
 
 @dataclass(frozen=True)

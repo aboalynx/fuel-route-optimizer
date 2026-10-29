@@ -135,6 +135,8 @@ VEHICLE_MPG = env.float("VEHICLE_MPG", default=10)
 
 # Planner
 CORRIDOR_MILES = env.float("CORRIDOR_MILES", default=10)
+# Skip stops that save less than this (a stop costs the driver time); 0 = the cheapest plan.
+DEFAULT_MIN_SAVING_PER_STOP_USD = env.float("DEFAULT_MIN_SAVING_PER_STOP_USD", default=5)
 
 # Routing
 ROUTING_PROVIDER = env("ROUTING_PROVIDER", default="osrm")

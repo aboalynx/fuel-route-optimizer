@@ -172,7 +172,7 @@ description: "Task list for Feature 004: Route Plan API"
 
 ## Phase 7: User Story 6 - Skip stops that barely save money (Priority: P2)
 
-**Goal**: optional `min_saving_per_stop_usd` (default 0 = off) drops stops that save less than it (FR-015, SC-007).
+**Goal**: `min_saving_per_stop_usd` (default 5 USD since 2026-10-30; 0 = the cheapest plan) drops stops that save less than it (FR-015, SC-007).
 
 **Independent Test**: `tests/unit/planner/test_fewer_stops.py` and the min-saving cases in `tests/integration/api/test_route_plan_api.py` pass.
 

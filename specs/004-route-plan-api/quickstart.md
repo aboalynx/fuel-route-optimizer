@@ -23,14 +23,16 @@ curl -s -X POST localhost:8000/api/v1/route-plan/ -H 'Content-Type: application/
   -d '{"start": "Dallas, TX", "finish": "Chicago, IL"}' | python -m json.tool | head -40
 ```
 
-Expected: 200; `meta.routing_calls` 1, `cached` false; about 966 miles; 4 stops, $134.59 (the
-cheapest plan from the Dallas city centre). Repeat it: `routing_calls` 0, `cached` true, identical
+Expected: 200; `meta.routing_calls` 1, `cached` false; about 966 miles; 2 stops, $134.76 with the
+default minimum saving of $5, and `minimum_possible_cost_usd` 134.59 (the cheapest plan from the
+Dallas city centre). Repeat it: `routing_calls` 0, `cached` true, identical
 `fuel_stops` and `summary`.
 
 ## 4. Minimum saving per stop
 
-Same request with `"min_saving_per_stop_usd": 5`. Expected: 2 stops, $134.76,
-`stops_dropped` 2, `extra_cost_vs_cheapest_usd` 0.17, `routing_calls` 0 (cached route).
+Same request with `"min_saving_per_stop_usd": 0`. Expected: the cheapest plan, 4 stops, $134.59,
+`stops_dropped` 0, `routing_calls` 0 (cached route). With the default (5): `stops_dropped` 2,
+`extra_cost_vs_cheapest_usd` 0.17.
 
 ## 5. Errors
 

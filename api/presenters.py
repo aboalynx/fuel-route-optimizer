@@ -45,6 +45,7 @@ def present(result: RoutePlanResult) -> dict:
             "gallons_purchased": gallons(plan.gallons_purchased),
             "fuel_left_gallons": gallons(plan.fuel_left_gallons),
             "total_fuel_cost_usd": plan.total_cost_usd,
+            "minimum_possible_cost_usd": result.plan.cheapest.total_cost_usd,
             "stops_count": len(stops),
             "stops_dropped": result.plan.stops_dropped,
             "extra_cost_vs_cheapest_usd": result.plan.extra_cost_vs_cheapest_usd.quantize(CENTS),

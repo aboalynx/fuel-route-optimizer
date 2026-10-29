@@ -12,7 +12,7 @@ Content-Type: application/json
 ```
 
 Optional fields: `start_fuel_gallons` (0..capacity, default full), `corridor_miles` (1..25, default
-10), `reserve_gallons` (0..25, default 0), `min_saving_per_stop_usd` (0..100, default 0 = off).
+10), `reserve_gallons` (0..25, default 0), `min_saving_per_stop_usd` (0..100, default 5; 0 = the cheapest plan).
 `start` and `finish` may also be `{"lat": 32.78, "lng": -96.80}`; then `name` in the response is the nearest place (e.g. `"Dallas, TX"`). Unknown fields → 400.
 
 ### 200 response
@@ -26,6 +26,7 @@ Optional fields: `start_fuel_gallons` (0..capacity, default full), `corridor_mil
     "total_gallons_consumed": 96.6452,
     "gallons_purchased": 46.6452,
     "total_fuel_cost_usd": 134.81,
+    "minimum_possible_cost_usd": 134.64,
     "stops_count": 2,
     "stops_dropped": 2,
     "extra_cost_vs_cheapest_usd": 0.17,
@@ -53,7 +54,7 @@ Optional fields: `start_fuel_gallons` (0..capacity, default full), `corridor_mil
 }
 ```
 
-Illustrative numbers (Dallas → Chicago with `min_saving_per_stop_usd = 5`); the shape is the
+Illustrative numbers (Dallas → Chicago with the default `min_saving_per_stop_usd` of 5); the shape is the
 contract.
 
 **Precision:** money 2 dp (ROUND_HALF_UP), gallons 4 dp, price per gallon exact as stored (up to

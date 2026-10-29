@@ -90,13 +90,20 @@ def test_unknown_fields_are_rejected_by_name():
 
 def test_defaults(settings):
     settings.CORRIDOR_MILES = 12
+    settings.DEFAULT_MIN_SAVING_PER_STOP_USD = 5
     ok, serializer = validate()
     assert ok
     data = serializer.validated_data
     assert data["start_fuel_gallons"] is None
     assert data["corridor_miles"] == Decimal(12)
     assert data["reserve_gallons"] == 0
-    assert data["min_saving_per_stop_usd"] == 0
+    assert data["min_saving_per_stop_usd"] == Decimal(5)
+
+
+def test_zero_min_saving_is_kept(settings):
+    ok, serializer = validate(min_saving_per_stop_usd=0)
+    assert ok
+    assert serializer.validated_data["min_saving_per_stop_usd"] == 0
 
 
 def test_start_and_finish_are_required():

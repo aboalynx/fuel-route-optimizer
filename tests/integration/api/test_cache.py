@@ -26,7 +26,7 @@ def test_repeat_request_uses_the_cache(client, route_stations, osrm):
         {"start_fuel_gallons": 30},
         {"corridor_miles": 5},
         {"reserve_gallons": 3},
-        {"min_saving_per_stop_usd": 5},
+        {"min_saving_per_stop_usd": 0},
     ],
 )
 def test_other_options_reuse_the_route_and_replan(client, route_stations, osrm, option):

@@ -18,8 +18,9 @@ This feature exposes the planner: `POST /api/v1/route-plan/` and a Leaflet map p
   `planner/route_output.py`, `routing/cached.py`. Django code stays thin: one service
   (`api/services/route_plan.py`), a place-index loader, serializers, a presenter, one view, one
   template.
-- **Clarified behaviour:** `min_saving_per_stop_usd` defaults to 0 so the default response is the
-  oracle-checked optimum (R6); price exact, gallons 4 dp, money 2 dp (R5); same location by 4-dp
+- **Clarified behaviour:** `min_saving_per_stop_usd` defaults to 5 USD (changed from 0 on
+  2026-10-30: the pure optimum is impractical), and every response reports the optimum's cost as
+  `minimum_possible_cost_usd` (R6); price exact, gallons 4 dp, money 2 dp (R5); same location by 4-dp
   rounding plus a < 0.01 mi guard (R4).
 
 ## Technical Context

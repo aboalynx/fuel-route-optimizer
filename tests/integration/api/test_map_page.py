@@ -26,3 +26,11 @@ def test_tiles_are_requested_with_a_referrer(client):
     # to tile.openstreetmap.org and OSM answers every tile with "403 Access blocked".
     html = client.get("/").content.decode()
     assert 'referrerPolicy: "strict-origin-when-cross-origin"' in html
+
+
+def test_page_defaults_to_the_api_minimum_saving_and_shows_the_cheapest_cost(client):
+    html = client.get("/").content.decode()
+    field = 'name="min_saving_per_stop_usd" type="number" min="0" max="100" step="any" value="5"'
+    assert field in html
+    assert "minimum_possible_cost_usd" in html
+    assert "cheapest possible" in html

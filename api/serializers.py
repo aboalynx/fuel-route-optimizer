@@ -58,11 +58,14 @@ class RoutePlanRequestSerializer(serializers.Serializer):
     start_fuel_gallons = _decimal(max_value=None, default=None, allow_null=True)
     corridor_miles = _decimal(max_value=25, decimal_places=3, min_value=1)
     reserve_gallons = _decimal(max_value=25, default=Decimal(0))
-    min_saving_per_stop_usd = _decimal(max_value=100, decimal_places=2, default=Decimal(0))
+    min_saving_per_stop_usd = _decimal(max_value=100, decimal_places=2)  # default: settings
 
     def validate(self, attrs):
         unknown = sorted(set(self.initial_data) - set(self.fields))
         if unknown:
             raise serializers.ValidationError({name: ["unknown field"] for name in unknown})
         attrs.setdefault("corridor_miles", Decimal(str(settings.CORRIDOR_MILES)))
+        attrs.setdefault(
+            "min_saving_per_stop_usd", Decimal(str(settings.DEFAULT_MIN_SAVING_PER_STOP_USD))
+        )
         return attrs

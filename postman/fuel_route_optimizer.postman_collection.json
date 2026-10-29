@@ -33,7 +33,7 @@
             ""
           ]
         },
-        "description": "The cheapest plan (default). First request: meta.routing_calls = 1.",
+        "description": "Default plan: stops that save less than $5 are skipped (2 stops, $134.76). summary.minimum_possible_cost_usd shows the mathematically cheapest cost ($134.59). First request: meta.routing_calls = 1.",
         "body": {
           "mode": "raw",
           "raw": "{\n  \"start\": \"Dallas, TX\",\n  \"finish\": \"Chicago, IL\"\n}",
@@ -80,7 +80,7 @@
       }
     },
     {
-      "name": "3. Minimum saving per stop = 5",
+      "name": "3. Cheapest plan (min_saving_per_stop_usd = 0)",
       "request": {
         "method": "POST",
         "header": [
@@ -101,10 +101,10 @@
             ""
           ]
         },
-        "description": "Drops the stops that save less than $5: on Dallas -> Chicago it drops the 7¢ and 10¢ stops for 17¢ more (4 stops -> 2). See summary.stops_dropped and summary.extra_cost_vs_cheapest_usd.",
+        "description": "The mathematically cheapest plan: 4 stops, $134.59, including a 4.2-gal stop that saves 7¢ and a 1.3-gal stop that saves 10¢. The default ($5) skips them for 17¢ more.",
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"start\": \"Dallas, TX\",\n  \"finish\": \"Chicago, IL\",\n  \"min_saving_per_stop_usd\": 5\n}",
+          "raw": "{\n  \"start\": \"Dallas, TX\",\n  \"finish\": \"Chicago, IL\",\n  \"min_saving_per_stop_usd\": 0\n}",
           "options": {
             "raw": {
               "language": "json"
@@ -169,7 +169,7 @@
             ""
           ]
         },
-        "description": "A long route: 16 stops in the cheapest plan.",
+        "description": "A long route with the default: 6 stops, $700.38 (cheapest possible $693.26 with 16 stops).",
         "body": {
           "mode": "raw",
           "raw": "{\n  \"start\": \"New York, NY\",\n  \"finish\": \"Los Angeles, CA\"\n}",
@@ -182,7 +182,7 @@
       }
     },
     {
-      "name": "6. New York -> Los Angeles, min saving 5",
+      "name": "6. New York -> Los Angeles, cheapest plan (0)",
       "request": {
         "method": "POST",
         "header": [
@@ -203,10 +203,10 @@
             ""
           ]
         },
-        "description": "16 stops -> 6 stops for $7.12 more.",
+        "description": "The pure cheapest plan: 16 stops, $693.26, several of 1–2 gallons a few miles apart. Compare with request 5.",
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"start\": \"New York, NY\",\n  \"finish\": \"Los Angeles, CA\",\n  \"min_saving_per_stop_usd\": 5\n}",
+          "raw": "{\n  \"start\": \"New York, NY\",\n  \"finish\": \"Los Angeles, CA\",\n  \"min_saving_per_stop_usd\": 0\n}",
           "options": {
             "raw": {
               "language": "json"

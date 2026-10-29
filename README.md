@@ -71,12 +71,13 @@ brute-force optimum on 50 seeded random trips. Details:
 returns the reason and the exact gap (for example "station gap: no fuel point between mile 100 and
 mile 700"), never a partial plan.
 
-**Fewer stops, optionally.** A purely cost-optimal plan can stop for 1.3 gallons to save 10
-cents. Set `min_saving_per_stop_usd` (0–100, default 0 = off) and a stop is kept only if dropping
-it would cost at least that much more, or the trip cannot be done without it. Only the plan's own
-stops are dropped, never swapped for other stations, so the extra cost stays small and is
-reported (`stops_dropped`, `extra_cost_vs_cheapest_usd`). The default response is always the
-provable minimum-cost plan. Details: "Fewer stops" in
+**Fewer stops.** By default, stops that save less than $5 are skipped, because a stop costs the
+driver time. On New York -> Los Angeles that means 6 stops instead of 16 for 1% more. Set
+`min_saving_per_stop_usd: 0` for the mathematically cheapest plan; the response always shows its
+cost as `minimum_possible_cost_usd`. A stop is kept only if dropping it would cost at least the
+minimum saving more, or the trip cannot be done without it. Only the plan's own stops are dropped,
+never swapped for other stations, so the extra cost stays small and is reported
+(`stops_dropped`, `extra_cost_vs_cheapest_usd`). Details: "Fewer stops" in
 [docs/algorithms/refuelling-greedy.md](docs/algorithms/refuelling-greedy.md).
 
 **Route cache.** A route is cached in-process for 24 hours, keyed by provider and start/finish
@@ -97,12 +98,12 @@ cached route. Failures are never cached.
 
 | Request | Result | `routing_calls` | `timings_ms.total` |
 | --- | --- | --- | --- |
-| Dallas, TX → Chicago, IL, first request in a new process | 966.3 mi, 4 stops, $134.59 | 1 | 1,288 (routing 734; first-use place index 390 and station index 162 included) |
+| Dallas, TX → Chicago, IL with `min_saving_per_stop_usd: 0`, first request in a new process | 966.3 mi, 4 stops, $134.59 (the cheapest plan) | 1 | 1,288 (routing 734; first-use place index 390 and station index 162 included) |
 | Same, repeated | identical plan | 0 (cached) | 64 (83 wall clock) |
-| Same with `min_saving_per_stop_usd: 5` | 2 stops, $134.76 (+$0.17; the 4.2-gal and 1.3-gal stops dropped) | 0 | 64 |
-| New York, NY → Los Angeles, CA | 2,793.9 mi, 16 stops, $693.26 | 1 | 839 (routing 755) |
+| Same with the default ($5) | 2 stops, $134.76 (+$0.17; the 4.2-gal and 1.3-gal stops skipped) | 0 | 64 |
+| New York, NY → Los Angeles, CA with `min_saving_per_stop_usd: 0` | 2,793.9 mi, 16 stops, $693.26 | 1 | 839 (routing 755) |
 | Same, repeated | identical plan | 0 (cached) | 233 |
-| Same with `min_saving_per_stop_usd: 5` | 6 stops, $700.38 (+$7.12) | 0 | 187 |
+| Same with the default ($5) | 6 stops, $700.38 (+$7.12, 1%) | 0 | 187 |
 
 The Dallas start is the city centre from the place lookup, so these figures differ slightly from
 the coordinate-based numbers above.
@@ -179,6 +180,7 @@ Set these in `.env`. Every setting has a default.
 | `ROUTING_TIMEOUT_SECONDS` | 8 | Routing request timeout |
 | `ROUTING_RETRY_AFTER_SECONDS` | 30 | `Retry-After` sent with a 503 when the routing service suggests none |
 | `ROUTE_CACHE_TTL_SECONDS` | 86400 | How long a route stays in the in-process cache |
+| `DEFAULT_MIN_SAVING_PER_STOP_USD` | 5 | Default minimum saving per stop; 0 = the cheapest plan |
 | `FUEL_PRICES_CSV` | `data/fuel-prices-for-be-assessment.csv` | Input price file |
 | `GEONAMES_FILE` | `data/geonames/US.txt` | Gazetteer (needed only to rebuild station data) |
 | `DATABASE_URL` | `sqlite:///<project>/db.sqlite3` | Database (e.g. PostgreSQL; psycopg is not included) |
@@ -233,7 +235,7 @@ wrong match, because a wrong location is worse than a missing one.
 10. The "inside the USA" check for coordinates uses the nearest US populated place within 25 miles. Points just across the border (e.g. Windsor, Ontario, next to Detroit) can therefore be accepted.
 11. There is no safety reserve by default (`reserve_gallons = 0`), so the range is the brief's 500 miles. A reserve of 0–25 gallons can be requested; the tank then never drops below it (with 5 gallons, no leg is longer than 450 miles). In production a default of about 5 gallons would be sensible.
 12. Money is exact: prices are never rounded before multiplying. Each stop's cost is rounded half up to cents, and the total cost is the sum of the rounded stop costs, so the stops always add up to the total shown.
-13. A purely cost-optimal plan can include two stops close together for a small saving. `min_saving_per_stop_usd` (off by default) drops stops that save less than it; it gives fewer stops, not always the fewest possible.
+13. A stop costs the driver time, so by default stops that save less than $5 are skipped (`min_saving_per_stop_usd`, 0–100; 0 gives the mathematically cheapest plan, whose cost is always returned as `minimum_possible_cost_usd`). The rule gives fewer stops, not always the fewest possible.
 14. `"City, ST"` needs a 2-letter state code (case-insensitive; the 50 states and DC). Full state names are rejected with a hint, and Canadian provinces and US territories are outside the station data. A city resolves to its GeoNames centre; `"New York, NY"` is an alias for GeoNames' "New York City".
 15. Coordinates are echoed as given, and `name` is the nearest place found by the 25-mile check.
 16. The route cache is per server process (Django's LocMem cache) and stores the route only.
@@ -255,12 +257,12 @@ Content-Type: application/json
 | `start_fuel_gallons` | number | full tank (50) | 0 to tank capacity |
 | `corridor_miles` | number | 10 | 1–25 |
 | `reserve_gallons` | number | 0 | 0–25; the tank never drops below it |
-| `min_saving_per_stop_usd` | number | 0 (off) | 0–100; see "Fewer stops" above |
+| `min_saving_per_stop_usd` | number | 5 | 0–100; 0 = the mathematically cheapest plan; see "Fewer stops" above |
 
 Unknown fields are rejected, so a typo is never silently ignored. `GET /api/v1/route-plan/?start=Dallas,%20TX&finish=Chicago,%20IL`
 (coordinates as `lat,lng`) returns the same response.
 
-Response for Dallas → Chicago with `"min_saving_per_stop_usd": 5`, measured (only the first stop shown; the full contract is in
+Response for Dallas → Chicago with the defaults, measured (only the first stop shown; the full contract is in
 [specs/004-route-plan-api/contracts/route_plan_api.md](specs/004-route-plan-api/contracts/route_plan_api.md)):
 
 ```json
@@ -269,7 +271,8 @@ Response for Dallas → Chicago with `"min_saving_per_stop_usd": 5`, measured (o
   "finish": {"query": "Chicago, IL", "name": "Chicago, IL", "lat": 41.85003, "lng": -87.65005},
   "summary": {
     "distance_miles": 966.296, "total_gallons_consumed": 96.6296, "gallons_purchased": 46.6296,
-    "fuel_left_gallons": 0, "total_fuel_cost_usd": 134.76, "stops_count": 2,
+    "fuel_left_gallons": 0, "total_fuel_cost_usd": 134.76, "minimum_possible_cost_usd": 134.59,
+    "stops_count": 2,
     "stops_dropped": 2, "extra_cost_vs_cheapest_usd": 0.17,
     "assumptions": {"mpg": 10, "max_range_miles": 500, "tank_capacity_gallons": 50,
                     "start_fuel_gallons": 50, "corridor_miles": 10, "reserve_gallons": 0,
