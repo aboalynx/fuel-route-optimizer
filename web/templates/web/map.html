@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fuel Route Planner</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"
+        integrity="sha512-h9FcoyWjHcOcmEVkxOfTLnmZFWIH0iZhZT1H2TbOq55xssQGEJHEaIm+PgoUaZbRvQTNTluNOEfb1ZRy6D3BOw=="
+        crossorigin="anonymous" referrerpolicy="no-referrer">
+  <style>
+    :root { --bg: #f6f7f9; --panel: #ffffff; --text: #1d2330; --muted: #5d6677; --line: #dde1e8;
+            --accent: #1f6feb; --stop: #c2410c; --error-bg: #fdecec; --error: #a4161a; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+           background: var(--bg); color: var(--text); }
+    .layout { display: grid; grid-template-columns: 340px 1fr; height: 100vh; }
+    aside { background: var(--panel); border-right: 1px solid var(--line); padding: 16px;
+            overflow-y: auto; }
+    h1 { font-size: 18px; margin: 0 0 12px; }
+    label { display: block; font-size: 13px; color: var(--muted); margin: 10px 0 4px; }
+    input { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px;
+            font: inherit; }
+    details { margin-top: 10px; }
+    summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+    button { margin-top: 14px; width: 100%; padding: 10px; border: 0; border-radius: 6px;
+             background: var(--accent); color: #fff; font: inherit; font-weight: 600;
+             cursor: pointer; }
+    button:disabled { opacity: 0.6; cursor: wait; }
+    #error { display: none; margin-top: 12px; padding: 10px; border-radius: 6px;
+             background: var(--error-bg); color: var(--error); }
+    #summary { margin-top: 16px; display: none; }
+    #summary dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0; }
+    #summary dt { color: var(--muted); }
+    #summary dd { margin: 0; font-weight: 600; text-align: right; }
+    #stops { margin: 14px 0 0; padding: 0; list-style: none; }
+    #stops li { padding: 8px 0; border-top: 1px solid var(--line); font-size: 14px; }
+    #map { height: 100%; }
+    .stop-icon { background: var(--stop); color: #fff; border: 2px solid #fff; border-radius: 50%;
+                 width: 26px; height: 26px; line-height: 22px; text-align: center;
+                 font-weight: 700; font-size: 13px; box-shadow: 0 1px 4px rgba(0,0,0,.4); }
+    @media (max-width: 760px) {
+      .layout { grid-template-columns: 1fr; grid-template-rows: auto 60vh; height: auto; }
+      aside { border-right: 0; border-bottom: 1px solid var(--line); }
+    }
+  </style>
+</head>
+<body>
+<div class="layout">
+  <aside>
+    <h1>Fuel Route Planner</h1>
+    <form id="plan-form">
+      <label for="start">Start ("City, ST" or "lat,lng")</label>
+      <input id="start" name="start" value="Dallas, TX" required>
+      <label for="finish">Finish</label>
+      <input id="finish" name="finish" value="Chicago, IL" required>
+      <details>
+        <summary>Options</summary>
+        <label for="start_fuel_gallons">Start fuel (gallons, default full)</label>
+        <input id="start_fuel_gallons" name="start_fuel_gallons" type="number" min="0" step="any">
+        <label for="corridor_miles">Corridor radius (miles, default 10)</label>
+        <input id="corridor_miles" name="corridor_miles" type="number" min="1" max="25" step="any">
+        <label for="reserve_gallons">Safety reserve (gallons, default 0)</label>
+        <input id="reserve_gallons" name="reserve_gallons" type="number" min="0" max="25" step="any">
+        <label for="min_saving_per_stop_usd">Minimum saving per stop (USD, default 0 = off)</label>
+        <input id="min_saving_per_stop_usd" name="min_saving_per_stop_usd" type="number" min="0" max="100" step="any">
+      </details>
+      <button type="submit" id="submit">Plan route</button>
+    </form>
+    <div id="error" role="alert"></div>
+    <section id="summary" aria-live="polite">
+      <dl id="summary-list"></dl>
+      <ol id="stops"></ol>
+    </section>
+  </aside>
+  <div id="map"></div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"
+        integrity="sha512-puJW3E/qXDqYp9IfhAI54BJEaWIfloJ7JWs7OeD5i6ruC9JZL1gERT1wjtwXFlh7CjE7ZJ+/vcRZRkIYIb6p4g=="
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script>
+  const API_URL = "/api/v1/route-plan/";
+  const map = L.map("map").setView([39.5, -98.35], 4);
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 18,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+  }).addTo(map);
+  let layer = null;
+
+  const form = document.getElementById("plan-form");
+  const errorBox = document.getElementById("error");
+  const summary = document.getElementById("summary");
+  const usd = (n) => "$" + Number(n).toFixed(2);
+
+  function parseLocation(text) {
+    const match = text.trim().match(/^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)$/);
+    return match ? { lat: Number(match[1]), lng: Number(match[2]) } : text.trim();
+  }
+
+  function requestBody() {
+    const data = new FormData(form);
+    const body = { start: parseLocation(data.get("start")), finish: parseLocation(data.get("finish")) };
+    for (const name of ["start_fuel_gallons", "corridor_miles", "reserve_gallons", "min_saving_per_stop_usd"]) {
+      const value = data.get(name);
+      if (value !== "") body[name] = Number(value);
+    }
+    return body;
+  }
+
+  function showError(message) {
+    errorBox.textContent = message;
+    errorBox.style.display = "block";
+  }
+
+  function row(list, term, value) {
+    const dt = document.createElement("dt");
+    const dd = document.createElement("dd");
+    dt.textContent = term;
+    dd.textContent = value;
+    list.append(dt, dd);
+  }
+
+  function popup(stop) {
+    const box = document.createElement("div");
+    const title = document.createElement("strong");
+    title.textContent = `${stop.sequence}. ${stop.name}`;
+    const text = document.createElement("div");
+    text.textContent = `$${stop.price_usd_per_gallon}/gal · ${stop.gallons} gal · ${usd(stop.cost_usd)}`;
+    box.append(title, text);
+    return box;
+  }
+
+  function render(plan) {
+    if (layer) layer.remove();
+    layer = L.geoJSON(plan.map, {
+      style: { color: "#1f6feb", weight: 4 },
+      pointToLayer: (feature, latlng) => L.marker(latlng, {
+        icon: L.divIcon({ className: "", html: `<div class="stop-icon">${feature.properties.sequence}</div>`, iconSize: [26, 26] }),
+      }),
+      onEachFeature: (feature, marker) => {
+        if (feature.properties.kind === "fuel_stop") marker.bindPopup(popup(feature.properties));
+      },
+    }).addTo(map);
+    map.fitBounds(layer.getBounds(), { padding: [30, 30] });
+
+    const s = plan.summary;
+    const list = document.getElementById("summary-list");
+    list.replaceChildren();
+    row(list, "From", plan.start.name || plan.start.query);
+    row(list, "To", plan.finish.name || plan.finish.query);
+    row(list, "Distance", `${Number(s.distance_miles).toFixed(1)} mi`);
+    row(list, "Total fuel cost", usd(s.total_fuel_cost_usd));
+    row(list, "Stops", s.stops_dropped ? `${s.stops_count} (${s.stops_dropped} dropped, +${usd(s.extra_cost_vs_cheapest_usd)})` : `${s.stops_count}`);
+    row(list, "Gallons bought", `${s.gallons_purchased}`);
+    row(list, "Routing calls", `${plan.meta.routing_calls}${plan.meta.cached ? " (cached)" : ""}`);
+    row(list, "Total time", `${plan.meta.timings_ms.total} ms`);
+
+    const stops = document.getElementById("stops");
+    stops.replaceChildren(...plan.fuel_stops.map((stop) => {
+      const item = document.createElement("li");
+      item.textContent = `${stop.sequence}. ${stop.name}, ${stop.city} ${stop.state} — mile ${Number(stop.mile_marker).toFixed(1)}, ${stop.gallons} gal at $${stop.price_usd_per_gallon} = ${usd(stop.cost_usd)}`;
+      return item;
+    }));
+    summary.style.display = "block";
+  }
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    errorBox.style.display = "none";
+    const button = document.getElementById("submit");
+    button.disabled = true;
+    try {
+      const response = await fetch(API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestBody()),
+      });
+      const body = await response.json();
+      if (!response.ok) {
+        showError(body.error ? body.error.message : `Request failed (${response.status})`);
+        return;
+      }
+      render(body);
+    } catch (error) {
+      showError("Could not reach the API: " + error.message);
+    } finally {
+      button.disabled = false;
+    }
+  });
+</script>
+</body>
+</html>

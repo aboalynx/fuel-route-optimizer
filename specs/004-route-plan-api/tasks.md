@@ -165,8 +165,8 @@ description: "Task list for Feature 004: Route Plan API"
 
 **Independent Test**: `tests/integration/api/test_map_page.py` passes; Dallas → Chicago and New York → Los Angeles render by hand (T036).
 
-- [ ] T024 [P] [US4] Write `tests/integration/api/test_map_page.py`: `GET /` → 200, HTML containing a form with `start` and `finish` inputs, the Leaflet script URL pinned to `leaflet/1.9.4`, and the API path `/api/v1/route-plan/`; no `{{` left unrendered.
-- [ ] T025 [US4] Implement `web/views.py` `MapView(TemplateView)` with `template_name = "web/map.html"`, `web/urls.py`, the include in `config/urls.py`, and `web/templates/web/map.html` per research R9: Leaflet 1.9.4 CSS/JS from cdnjs with SRI; OSM tile layer with attribution; form (start, finish, start fuel, radius, reserve, min saving per stop); `fetch` POST with JSON; `L.geoJSON` for the route; numbered `divIcon` markers with popups (name, price, gallons, cost); summary panel (distance, total cost, stops, routing calls, total time from `meta.timings_ms.total`); an error box showing `error.message`; inline CSS/JS; works at phone width. Run T024 green.
+- [X] T024 [P] [US4] Write `tests/integration/api/test_map_page.py`: `GET /` → 200, HTML containing a form with `start` and `finish` inputs, the Leaflet script URL pinned to `leaflet/1.9.4`, and the API path `/api/v1/route-plan/`; no `{{` left unrendered.
+- [X] T025 [US4] Implement `web/views.py` `MapView(TemplateView)` with `template_name = "web/map.html"`, `web/urls.py`, the include in `config/urls.py`, and `web/templates/web/map.html` per research R9: Leaflet 1.9.4 CSS/JS from cdnjs with SRI; OSM tile layer with attribution; form (start, finish, start fuel, radius, reserve, min saving per stop); `fetch` POST with JSON; `L.geoJSON` for the route; numbered `divIcon` markers with popups (name, price, gallons, cost); summary panel (distance, total cost, stops, routing calls, total time from `meta.timings_ms.total`); an error box showing `error.message`; inline CSS/JS; works at phone width. Run T024 green.
 
 ---
 
