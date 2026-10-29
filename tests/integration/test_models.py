@@ -2,6 +2,7 @@ from decimal import Decimal
 
 import pytest
 
+from stations.enums import GeoSource
 from stations.models import FuelPrice, FuelStation
 
 pytestmark = pytest.mark.django_db
@@ -16,7 +17,7 @@ def make_station(opis_id=7, price="3.00733333"):
         state="OK",
         lat=36.53,
         lng=-95.22,
-        geo_source="city_centroid",
+        geo_source=GeoSource.CITY_CENTROID,
         best_price=Decimal(price),
     )
 

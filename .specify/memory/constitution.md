@@ -87,6 +87,15 @@ default.
   runtime; the request path never geocodes.
 - Configuration that may vary (for example, vehicle range and MPG) MUST have documented
   defaults so the project runs without extra settings.
+- Fixed value sets (for example, a station's coordinate source or API error codes) MUST be
+  Python `enum.StrEnum` members defined in Django-free modules (for example,
+  `stations/enums.py`). Model fields MUST take their choices from the enum, and code MUST NOT
+  use bare string literals for these values. Stored and serialized values stay the plain
+  strings.
+- Application logic MUST live in services: each Django app keeps it in `<app>/services/`, one
+  module per service. Views, serializers, management commands and admin MUST stay thin: parse
+  input, call a service, format output, map errors. Pure algorithms stay in Django-free modules
+  (Principle III), and services call them.
 
 ## Development Workflow
 
@@ -104,4 +113,4 @@ semantic versioning: MAJOR for removing or redefining a principle, MINOR for add
 principle or materially expanding guidance, PATCH for wording and clarifications. Plans
 and reviews MUST include a constitution check against every principle above.
 
-**Version**: 1.1.0 | **Ratified**: 2026-10-29 | **Last Amended**: 2026-10-29
+**Version**: 1.2.0 | **Ratified**: 2026-10-29 | **Last Amended**: 2026-10-29

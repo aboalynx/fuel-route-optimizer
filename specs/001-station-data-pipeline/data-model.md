@@ -14,7 +14,7 @@ One physical US truck stop that was located.
 | `city` | `CharField(80)` | From the first row, trimmed, original casing |
 | `state` | `CharField(2, db_index=True)` | US state or DC code |
 | `lat`, `lng` | `FloatField(null=True)` | City-centre coordinates. Never null for stored stations in this feature |
-| `geo_source` | `CharField(20, choices=[("city_centroid", …), ("osm", …)])` | Always `city_centroid` in 001 (FR-011) |
+| `geo_source` | `CharField(20, choices=GeoSource.choices())` | `GeoSource` `StrEnum` (`stations/enums.py`): `CITY_CENTROID = "city_centroid"`, `OSM = "osm"`. Always `GeoSource.CITY_CENTROID` in 001 (FR-011) |
 | `match_score` | `PositiveSmallIntegerField(null=True)` | Always null in 001; reserved for Feature 005 |
 | `best_price` | `DecimalField(12, 8)` | Minimum of the station's price rows (FR-005), exact (FR-007) |
 

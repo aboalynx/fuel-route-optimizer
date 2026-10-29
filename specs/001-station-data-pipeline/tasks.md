@@ -70,7 +70,7 @@ hand-made fixture. The real shipped fixture is produced by US2's real run (T031)
     - `city = CharField(max_length=80)`
     - `state = CharField(max_length=2, db_index=True)`
     - `lat = FloatField(null=True)` and `lng = FloatField(null=True)`
-    - `geo_source = CharField(max_length=20, choices=[("city_centroid", "City centroid"), ("osm", "OpenStreetMap")])`
+    - `geo_source = CharField(max_length=20, choices=GeoSource.choices())`, where `GeoSource` is the `StrEnum` in `stations/enums.py` (`CITY_CENTROID = "city_centroid"`, `OSM = "osm"`; pure Python, no Django import; tested in `tests/unit/stations/test_enums.py`)
     - `match_score = PositiveSmallIntegerField(null=True)`
     - `best_price = DecimalField(max_digits=12, decimal_places=8)`
   - **`FuelPrice`:**
@@ -94,15 +94,15 @@ hand-made fixture. The real shipped fixture is produced by US2's real run (T031)
 
 ### Tests for User Story 1 ⚠️ (write first, must fail)
 
-- [ ] T010 [P] [US1] Create the hand-made fixture `tests/fixtures/stations_sample.json` in Django `dumpdata` format (indent 2). It holds 3 `stations.fuelstation` objects (pk = opis_id, `geo_source` `city_centroid`, lat and lng set, prices as 8-dp strings) and 4 `stations.fuelprice` objects with explicit pks 1–4. One price is `"3.00733333"`.
-- [ ] T011 [US1] Write `tests/integration/test_load_stations.py`:
+- [X] T010 [P] [US1] Create the hand-made fixture `tests/fixtures/stations_sample.json` in Django `dumpdata` format (indent 2). It holds 3 `stations.fuelstation` objects (pk = opis_id, `geo_source` `city_centroid`, lat and lng set, prices as 8-dp strings) and 4 `stations.fuelprice` objects with explicit pks 1–4. One price is `"3.00733333"`.
+- [X] T011 [US1] Write `tests/integration/test_load_stations.py`:
   - **Sample fixture:** `call_command("loaddata", <tests/fixtures/stations_sample.json>)` gives 3 stations and 4 prices.
-  - **Shipped fields:** no state in the 13 Canadian codes; every station has non-null lat/lng and `geo_source == "city_centroid"`; `match_score is None`; the price reads back `== Decimal("3.00733333")`.
+  - **Shipped fields:** no state in the 13 Canadian codes; every station has non-null lat/lng and `geo_source == GeoSource.CITY_CENTROID`; `match_score is None`; the price reads back `== Decimal("3.00733333")`.
   - **Shipped fixture:** a second test loads `stations/fixtures/stations.json` with the same assertions plus `count() > 6000`. Use `pytest.mark.skipif(not path.exists())` until T031 produces it.
 
 ### Implementation for User Story 1
 
-- [ ] T012 [US1] Make T011 pass (models and migration from Phase 2; fix any fixture-format issue). Then add a "Load station data" note to the README Setup section in `README.md`: `python manage.py loaddata stations` (no network; arrives with the T031 data).
+- [X] T012 [US1] Make T011 pass (models and migration from Phase 2; fix any fixture-format issue). Then add a "Load station data" note to the README Setup section in `README.md`: `python manage.py loaddata stations` (no network; arrives with the T031 data).
 
 **Checkpoint**: loading works offline. The real `stations.json` arrives with US2 (T031), and T011's skipped test then runs.
 
@@ -162,7 +162,7 @@ hand-made fixture. The real shipped fixture is produced by US2's real run (T031)
   - identical bytes on two writes;
   - written through a temp file and `os.replace` (no partial file left on error).
 - [ ] T017 [US2] Write `tests/integration/test_build_station_data.py` (pytest-django). Run `call_command("build_station_data", csv=…, geonames=…, plus the out_dirs overrides from T005)` on the samples and cover:
-  - **(a) Happy path:** exit OK; stations, prices and best prices as expected; `geo_source = city_centroid`; `match_score` null; report labels on stdout; unmatched file lists `Nowhereville`.
+  - **(a) Happy path:** exit OK; stations, prices and best prices as expected; `geo_source == GeoSource.CITY_CENTROID`; `match_score` null; report labels on stdout; unmatched file lists `Nowhereville`.
   - **(b) Idempotence:** two runs give identical PKs and byte-identical fixture and unmatched files.
   - **(c) Precision:** after the run, `flush` then `loaddata` of the produced fixture still reads `Decimal("3.00733333")`.
   - **(d) Bad rows:** `sample_fuel_bad.csv` → `CommandError` naming lines 3 and 5. DB rows and output files are unchanged (pre-seed data, then compare).
@@ -201,21 +201,24 @@ hand-made fixture. The real shipped fixture is produced by US2's real run (T031)
   - `csv.writer(lineterminator="\n")`, UTF-8;
   - rows ordered by `opis_id`;
   - write to `path.with_suffix(".tmp")`, then `os.replace`.
-- [ ] T022 [US2] Implement `stations/management/commands/build_station_data.py`:
-  - **Flags:**
+- [ ] T022 [US2] Implement the rebuild **service** and a **thin** command (constitution, Technical Constraints: logic lives in services):
+  - **Service, `stations/services/station_data.py`** (plus `stations/services/__init__.py`):
+    - `rebuild_station_data(csv_path, geonames_path, *, min_geocoded_pct, export, fixture_out, unmatched_out, places_out) -> RebuildOutcome(result, report_text)`.
+    - It owns the run phases, exactly as research R7:
+      1. `build()`.
+      2. Write the unmatched CSV.
+      3. Threshold check → raise `LocatedShareTooLow(report_text)`.
+      4. `transaction.atomic()`: delete all `FuelPrice` and `FuelStation`; `bulk_create` stations sorted by `opis_id` (lat/lng = `float(place.lat_text)`, `geo_source = GeoSource.CITY_CENTROID`); `bulk_create` prices with the explicit ids from `assign_price_ids`; `call_command("dumpdata", "stations.FuelStation", "stations.FuelPrice", indent=2, output=<temp>)`.
+      5. After commit, `os.replace` the temp file onto `fixture_out`.
+      6. On any exception, delete the temp files.
+    - `CsvValidationError` and `GazetteerMissing` propagate unchanged. The service never prints.
+  - **Command, `stations/management/commands/build_station_data.py`:** thin. It parses the flags, calls the service, writes `report_text` to stdout, and maps the service's exceptions to `CommandError` (non-zero exit). For `LocatedShareTooLow`, it prints the report first. Flags:
     - `--csv` (default `settings.FUEL_PRICES_CSV`);
     - `--geonames` (default `settings.GEONAMES_FILE`);
     - `--min-geocoded-pct` (float 0–100, default 95);
     - `--no-export`;
     - `--skip-osm` (accepted no-op);
     - hidden test-only output paths: `--fixture-out`, `--unmatched-out`, `--places-out`, defaulting to the committed paths.
-  - **Run phases exactly as research R7:**
-    1. `build()`; map `CsvValidationError` and `GazetteerMissing` to `CommandError`.
-    2. Print the report; write the unmatched CSV.
-    3. Threshold check → `CommandError`.
-    4. `transaction.atomic()`: delete all `FuelPrice` and `FuelStation`; `bulk_create` stations sorted by `opis_id` (lat/lng = `float(place.lat_text)`, `geo_source = "city_centroid"`); `bulk_create` prices with the explicit ids from `assign_price_ids`; `call_command("dumpdata", "stations.FuelStation", "stations.FuelPrice", indent=2, output=<temp>)`.
-    5. After commit, `os.replace` the temp file onto `stations/fixtures/stations.json`.
-    6. On any exception, delete the temp files.
 - [ ] T023 [US2] Run `python -m pytest tests/unit/stations tests/integration/test_build_station_data.py`. Fix until green. The test-first evidence is not checked here after the fact. Before each of T018–T022, the matching test file is run and its failing output (import or assertion errors) is shown, and that output is the record.
 
 **Checkpoint**: the rebuild works on the samples, is reproducible, and fails safely.
@@ -259,7 +262,7 @@ hand-made fixture. The real shipped fixture is produced by US2's real run (T031)
 - [ ] T028 [P] [US3] Implement `write_places_gz(rows, path)` in `stations/pipeline/export.py`:
   - `gzip.GzipFile(filename="", mode="wb", fileobj=…, mtime=0)` wrapping a `csv.writer(lineterminator="\n")`;
   - write to a temp file, then `os.replace`.
-- [ ] T029 [US3] Wire the place lookup into `stations/management/commands/build_station_data.py`:
+- [ ] T029 [US3] Wire the place lookup into the rebuild service `stations/services/station_data.py` (the command needs no change beyond printing the report):
   - write it to a temp file inside the atomic block (skipped with `--no-export`);
   - `os.replace` it onto `data/places/us_places.csv.gz` after commit;
   - pass `places_info` (count, MB) to `format_report`.

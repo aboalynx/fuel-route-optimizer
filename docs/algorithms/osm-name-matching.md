@@ -27,7 +27,7 @@ for station in stations (by opis_id):
 
 de-conflict: one OSM element -> at most one station; higher score wins, tie -> lower opis_id;
              the loser keeps its centroid
-apply:       lat/lng from OSM, geo_source = "osm", match_score = score
+apply:       lat/lng from OSM, geo_source = GeoSource.OSM, match_score = score
 ```
 
 `token_set_ratio` ignores word order and extra words: `pilot` vs `pilot flying j` scores 100. The

@@ -1,6 +1,6 @@
 # Algorithm: route corridor search and mile-marker projection
 
-Modules `planner/geometry.py`, `planner/corridor.py`, `stations/index.py` · Feature 002 · [ADR-0002](../adr/0002-kdtree-corridor-search.md)
+Modules `planner/geometry.py`, `planner/corridor.py`, `stations/services/station_index.py` · Feature 002 · [ADR-0002](../adr/0002-kdtree-corridor-search.md)
 
 ## Context
 

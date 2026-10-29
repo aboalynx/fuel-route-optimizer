@@ -17,7 +17,7 @@ A single Django management command, `build_station_data`, rebuilds the station d
 5. Store everything atomically in `FuelStation` / `FuelPrice`.
 6. Export three committed, byte-stable files: the Django fixture, the unmatched-cities CSV, and the gzipped place lookup.
 
-The logic lives in pure modules under `stations/pipeline/`, and the command is a thin shell around them. A
+The algorithms live in pure modules under `stations/pipeline/`. The rebuild service `stations/services/station_data.py` runs them, stores the data and exports the files. The management command is a thin shell around that service. A
 feasibility scan of the real files measured 99.8% of stations located (13 unmatched) and a
 6.5 s gazetteer pass (research R1, R2).
 
@@ -87,6 +87,7 @@ specs/001-station-data-pipeline/
 
 ```text
 stations/
+├── enums.py                        # GeoSource StrEnum (pure, no Django); model choices + pipeline values
 ├── models/                         # one module per model
 │   ├── __init__.py                 # exports FuelStation, FuelPrice
 │   ├── fuel_station.py
@@ -98,8 +99,11 @@ stations/
 │   ├── geonames.py                 # normalise_place_name, load_gazetteer, tie rule, lookup
 │   ├── build.py                    # locate stations, BuildResult, report numbers, place-lookup rows
 │   └── export.py                   # byte-stable writers: unmatched CSV, gzipped place lookup
+├── services/                       # application logic (one module per service)
+│   ├── __init__.py
+│   └── station_data.py             # rebuild_station_data(): phases R7, DB write, dumpdata, exports
 ├── management/commands/
-│   └── build_station_data.py       # flags, phases R7, DB write, dumpdata, report output
+│   └── build_station_data.py       # thin: flags -> service -> report / exit code
 └── fixtures/stations.json          # committed
 
 data/
@@ -125,7 +129,7 @@ tests/
 
 **Structure Decision**: keep the existing single Django project. This feature touches only the
 `stations` app, `data/`, and `tests/`. The pipeline is split into four small pure modules (one per
-concern), so each has its own unit test file and the management command stays thin.
+concern), so each has its own unit test file. The rebuild service owns the DB writes and exports, and the management command stays thin (constitution, Technical Constraints: logic lives in services).
 
 ## Implementation notes for `/speckit-tasks`
 

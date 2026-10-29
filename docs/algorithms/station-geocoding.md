@@ -27,7 +27,7 @@ fallback  = {(norm(alt), state) for alt in alternatenames}  -> place   # only if
 tie rule  = highest population, then lowest geonameid
 
 for each station: place = primary.get(key) or fallback.get(key)
-    found   -> lat, lng = place centroid; geo_source = "city_centroid"; match_score = null
+    found   -> lat, lng = place centroid; geo_source = GeoSource.CITY_CENTROID; match_score = null
     missing -> excluded, written to data/reports/unmatched_cities.csv
 ```
 

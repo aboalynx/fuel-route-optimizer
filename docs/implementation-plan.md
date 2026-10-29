@@ -184,24 +184,32 @@ FIRST USE: stations + KD-tree loaded into memory once (lazy, lru_cache)
 | Module | Responsibility | Django? |
 | --- | --- | --- |
 | `stations/models/` | `FuelStation` (`fuel_station.py`), `FuelPrice` (`fuel_price.py`); one module per model | Yes |
+| `stations/enums.py` | `GeoSource` (`StrEnum`): fixed value sets shared by models and pipeline | No |
 | `stations/pipeline/clean.py` | CSV parsing, stripping, Canada filter, `Decimal` prices, grouping | No |
 | `stations/pipeline/geonames.py` | GeoNames streaming, `normalise_place_name()`, lookup, places index export | No |
 | `stations/pipeline/osm.py`, `matching.py` | Overpass fetch with disk cache; name cleaning and fuzzy matching (Feature 005) | No |
-| `stations/management/commands/build_station_data.py` | Runs the pipeline, stores, reports, exports the fixture | Yes |
-| `stations/index.py` | In-memory station arrays + KD-tree, built lazily once | Reads the model once |
+| `stations/services/station_data.py` | Rebuild service: runs the pure pipeline, stores atomically, exports the fixture, place lookup and unmatched file | Yes |
+| `stations/management/commands/build_station_data.py` | Thin: parses flags, calls the rebuild service, prints the report, maps errors to exit codes | Yes |
+| `stations/services/station_index.py` | Station index service: in-memory station arrays + KD-tree, built lazily once | Reads the model once |
 | `routing/base.py`, `routing/osrm.py` | `RoutingProvider` protocol, OSRM provider, error mapping | Settings only |
 | `planner/geometry.py`, `planner/corridor.py` | Haversine, resampling, unit vectors, corridor search | No |
 | `planner/optimizer.py` | The refuelling algorithm (pure function) | No |
 | `planner/locations.py` | Resolve `"City, ST"` / lat-lng against the places index | No |
-| `planner/service.py` | Orchestrates the request path and timings | No |
-| `api/` | DRF serializers, view, URLs, error responses | Yes |
-| `web/` | Leaflet template and view | Yes |
+| `planner/services/route_plan.py` | Route-plan service: orchestrates the request path and timings | No |
+| `api/` | Thin DRF layer: serializers, view, URLs, error responses; the view calls the route-plan service | Yes |
+| `web/` | Leaflet template and a thin view | Yes |
 
 ### 5.2 Data model
 
 ```python
+# stations/enums.py (pure Python, no Django)
+class GeoSource(StrEnum):
+    CITY_CENTROID = "city_centroid"
+    OSM = "osm"
+    # .label and .choices() give the model field its (value, label) choices
+
+
 class FuelStation(models.Model):
-    GEO_SOURCES = [("city_centroid", "City centroid"), ("osm", "OpenStreetMap")]
     opis_id = models.IntegerField(primary_key=True)  # natural key = stable PK
     name = models.CharField(max_length=120)
     address = models.CharField(max_length=200)
@@ -209,7 +217,7 @@ class FuelStation(models.Model):
     state = models.CharField(max_length=2, db_index=True)
     lat = models.FloatField(null=True)
     lng = models.FloatField(null=True)
-    geo_source = models.CharField(max_length=20, choices=GEO_SOURCES)
+    geo_source = models.CharField(max_length=20, choices=GeoSource.choices())
     match_score = models.PositiveSmallIntegerField(null=True)
     best_price = models.DecimalField(max_digits=12, decimal_places=8)  # exact; CSV has up to 8 dp
 
@@ -287,6 +295,7 @@ The numbers are illustrative; the shape is the contract. Field names carry units
 | 503 | `routing_unavailable` | Provider down, timed out (`ROUTING_TIMEOUT_SECONDS`), or no route. Includes `Retry-After` |
 
 Error body: `{"error": {"code": "...", "message": "...", "details": {...}}}`.
+The codes are members of an `ErrorCode` `StrEnum` (constitution, Technical Constraints), never bare strings in code.
 
 ## 6. Current state of the repo
 
@@ -404,7 +413,7 @@ missing, the command stops with a clear error naming the expected path and the d
    - Build the lookup `(normalised_name, state) → place`. Primary keys come from `name` and `asciiname`. Alternate names are used only as a fallback lookup.
    - Tie rule when several places share a key: highest population, then lowest geonameid.
 3. **Assign coordinates:**
-   - Each station gets its city's centroid: `lat`, `lng`, `geo_source = "city_centroid"`, `match_score = null`.
+   - Each station gets its city's centroid: `lat`, `lng`, `geo_source = GeoSource.CITY_CENTROID`, `match_score = null`.
    - Unmatched stations are excluded from the tables and written to `data/reports/unmatched_cities.csv` (`opis_id, name, city, state`).
 4. **Places index:**
    - Export `data/places/us_places.csv.gz` (`normalised_name, display_name, state, lat, lng, population`).
@@ -473,7 +482,7 @@ Acceptance (on the provided CSV):
 
 ```text
 Django 6.1 + SQLite. Models FuelStation and FuelPrice as in docs/implementation-plan.md section 5.2
-(geo_source choices "city_centroid", "osm"; price and best_price DecimalField(max_digits=12,
+(geo_source choices from the GeoSource StrEnum in stations/enums.py; price and best_price DecimalField(max_digits=12,
 decimal_places=8) so CSV prices with up to 8 dp are stored exactly). Pure modules, no Django
 imports: stations/pipeline/clean.py (csv module, strip, Canadian codes AB BC MB NB NL NS NT NU ON PE
 QC SK YT, Decimal prices, group by OPIS ID -> StationRecord / PriceRow dataclasses, min price, first
@@ -568,7 +577,7 @@ LatLng(lat, lng). planner/geometry.py (pure numpy): haversine_miles, resample by
 cumulative miles rescaled to the provider distance, to_unit_vectors, chord_for_miles.
 planner/corridor.py: find_candidates(route_points, distance_miles, index, corridor_miles) ->
 list[Candidate(opis_id, mile_marker, off_route_miles)], default settings.CORRIDOR_MILES.
-stations/index.py: lru_cache'd get_station_index() built lazily on first use (optionally warmed in
+stations/services/station_index.py: lru_cache'd get_station_index() built lazily on first use (optionally warmed in
 config/wsgi.py) — never query the DB in AppConfig.ready() (Django 5.0+ warns, and it runs during
 migrate). cKDTree on 3D unit vectors; query_ball_point with chord(r + s/2); nearest dense route
 point via a per-request route cKDTree; sort by (mile_marker, opis_id). Algorithm:
@@ -745,7 +754,7 @@ Decided details (no clarify step needed):
 ```text
 planner/locations.py (pure): load data/places/us_places.csv.gz once; parse "City, ST" with the same
 normalise_place_name as the pipeline; coordinates -> nearest place (KD-tree on unit vectors) within
-25 mi or location_outside_us. planner/service.py: plan_route(...) times each step with
+25 mi or location_outside_us. planner/services/route_plan.py: plan_route(...) times each step with
 time.perf_counter, converts floats to Decimal at the optimizer boundary, derives tank capacity from
 VEHICLE_MAX_RANGE_MILES / VEHICLE_MPG, builds GeoJSON (route LineString simplified to every Nth
 point if > 5,000 points; numbered stop Points). Route cache via django.core.cache (LocMem) in
@@ -800,7 +809,7 @@ can be matched confidently. This runs offline, never at request time.
    - Accept only a score ≥ 85 with a single clear winner. A tie keeps the city centroid.
    - One OSM element maps to at most one OPIS station. The higher score wins; on a tie the lower `opis_id` wins. The loser keeps its centroid.
 4. **Apply:**
-   - Accepted matches set `lat`/`lng` from OSM, `geo_source = "osm"`, `match_score = score`.
+   - Accepted matches set `lat`/`lng` from OSM, `geo_source = GeoSource.OSM`, `match_score = score`.
    - The report adds osm / city_centroid / dropped percentages.
    - Regenerate and commit the fixture, and update the README numbers.
 

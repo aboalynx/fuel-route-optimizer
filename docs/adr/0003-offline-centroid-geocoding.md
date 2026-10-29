@@ -17,7 +17,7 @@ The reviewer must run everything with no keys and no geocoding step (constitutio
   - feature class P, excluding PPLH/PPLQ/PPLW;
   - primary names first, alternate names only as a fallback;
   - ties broken by population, then geonameid.
-- Stations get `geo_source = "city_centroid"`. Unmatched stations are excluded and listed in
+- Stations get `geo_source = GeoSource.CITY_CENTROID`. Unmatched stations are excluded and listed in
   `data/reports/unmatched_cities.csv`.
 - Export a committed places index (`data/places/us_places.csv.gz`) so request-time lookups use the
   same normalisation.
