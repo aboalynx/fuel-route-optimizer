@@ -98,7 +98,7 @@ description: "Task list for Feature 003: Refuel Optimizer"
 
 ### Tests for User Story 2 ⚠️ (write first, show failing)
 
-- [ ] T007 [P] [US2] Write `tests/unit/planner/test_infeasible.py` (pure), covering:
+- [X] T007 [P] [US2] Write `tests/unit/planner/test_infeasible.py` (pure), covering:
   - stations at miles 100 and 700, 800 mi → `STATION_GAP`, `gap_start_mile == 100`, `gap_end_mile == 700`, `usable_range_miles == 500`, `start_fuel_gallons is None`, `gallons_short is None`;
   - no stations, 900 mi → `STATION_GAP` from 0 to 900;
   - start fuel 10 gal, first station at 150, 300 mi → `START_FUEL_INSUFFICIENT`, `gap_start_mile == 100`, `gap_end_mile == 150`, `start_fuel_gallons == 10`, `gallons_short == 5`;
@@ -106,11 +106,11 @@ description: "Task list for Feature 003: Refuel Optimizer"
   - no node within 500 mi of the origin with a part-full tank → `STATION_GAP` from 0 (a full tank would not help), not `START_FUEL_INSUFFICIENT`;
   - `str(error)` contains the reason value and the gap miles; for start fuel it also contains the start fuel, the next fuel point and the gallons short (data-model.md examples);
   - an infeasible call returns nothing: the exception is raised, no `FuelPlan` is produced.
-- [ ] T008 [P] [US2] Extend `tests/unit/planner/test_oracle_agreement.py`: for every seed `0..49`, `oracle_cost is None` if and only if `plan_refuelling` raises `InfeasibleRoute`.
+- [X] T008 [P] [US2] Extend `tests/unit/planner/test_oracle_agreement.py`: for every seed `0..49`, `oracle_cost is None` if and only if `plan_refuelling` raises `InfeasibleRoute`.
 
 ### Implementation for User Story 2
 
-- [ ] T009 [US2] In `planner/optimizer.py`, complete `InfeasibleRoute`: fields `reason`, `gap_start_mile`, `gap_end_mile`, `usable_range_miles`, `start_fuel_gallons` (`Decimal | None`, only for `START_FUEL_INSUFFICIENT`), `gallons_short` (`Decimal | None`, only for `START_FUEL_INSUFFICIENT`: `(gap_end − gap_start) / mpg`), and a readable `__str__` as in data-model.md. Make the origin check raise `STATION_GAP` when the window is empty even with a full tank. Run T007 and T008 green.
+- [X] T009 [US2] In `planner/optimizer.py`, complete `InfeasibleRoute`: fields `reason`, `gap_start_mile`, `gap_end_mile`, `usable_range_miles`, `start_fuel_gallons` (`Decimal | None`, only for `START_FUEL_INSUFFICIENT`), `gallons_short` (`Decimal | None`, only for `START_FUEL_INSUFFICIENT`: `(gap_end − gap_start) / mpg`), and a readable `__str__` as in data-model.md. Make the origin check raise `STATION_GAP` when the window is empty even with a full tank. Run T007 and T008 green.
 
 **Checkpoint**: US1 and US2 both work; every outcome is a plan or a detailed `InfeasibleRoute`.
 

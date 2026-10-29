@@ -44,11 +44,35 @@ class InfeasibleReason(StrEnum):
 
 
 class InfeasibleRoute(Exception):
-    def __init__(self, reason: InfeasibleReason, gap_start_mile: Decimal, gap_end_mile: Decimal):
+    """The trip cannot be completed. For START_FUEL_INSUFFICIENT, gap_start_mile is how far the
+    usable start fuel reaches and gap_end_mile is the next fuel point."""
+
+    def __init__(
+        self,
+        reason: InfeasibleReason,
+        gap_start_mile: Decimal,
+        gap_end_mile: Decimal,
+        usable_range_miles: Decimal,
+        start_fuel_gallons: Decimal | None = None,
+        gallons_short: Decimal | None = None,
+    ):
         self.reason = reason
         self.gap_start_mile = gap_start_mile
         self.gap_end_mile = gap_end_mile
-        super().__init__(f"{reason}: mile {gap_start_mile} to mile {gap_end_mile}")
+        self.usable_range_miles = usable_range_miles
+        self.start_fuel_gallons = start_fuel_gallons
+        self.gallons_short = gallons_short
+        if reason == InfeasibleReason.START_FUEL_INSUFFICIENT:
+            message = (
+                f"{reason}: {_fmt(start_fuel_gallons)} gal covers {_fmt(gap_start_mile)} mi, "
+                f"next fuel point at mile {_fmt(gap_end_mile)} ({_fmt(gallons_short)} gal short)"
+            )
+        else:
+            message = (
+                f"{reason}: no fuel point between mile {_fmt(gap_start_mile)} and mile "
+                f"{_fmt(gap_end_mile)} (range {_fmt(usable_range_miles)} mi)"
+            )
+        super().__init__(message)
 
 
 def round_cents(amount_usd: Decimal) -> Decimal:
@@ -84,12 +108,21 @@ def plan_refuelling(
     while i < len(nodes) - 1:
         here = nodes[i]
         j, cheaper = _next_node(nodes, i, capacity)
-        if j is None:
-            raise InfeasibleRoute(InfeasibleReason.STATION_GAP, here.mile, nodes[i + 1].mile)
+        if j is None:  # nothing within a full tank, whatever the start fuel
+            raise InfeasibleRoute(
+                InfeasibleReason.STATION_GAP, here.mile, nodes[i + 1].mile, capacity
+            )
         leg = nodes[j].mile - here.mile
         buy = max(Decimal(0), leg - fuel) if cheaper else capacity - fuel
-        if i == 0 and buy > 0:
-            raise InfeasibleRoute(InfeasibleReason.START_FUEL_INSUFFICIENT, fuel, nodes[j].mile)
+        if i == 0 and buy > 0:  # fuel cannot be bought at the start
+            raise InfeasibleRoute(
+                InfeasibleReason.START_FUEL_INSUFFICIENT,
+                fuel,
+                nodes[j].mile,
+                capacity,
+                start_fuel_gallons=start_fuel_gallons,
+                gallons_short=buy / mpg,
+            )
         if buy > 0:
             gallons = buy / mpg
             purchases.append(
@@ -184,6 +217,11 @@ def _validate(distance_miles, stations, mpg, max_range_miles, start_fuel_gallons
             raise ValueError("stations must be sorted by (mile_marker, opis_id) order")
         previous = key
     return capacity_gallons
+
+
+def _fmt(value: Decimal) -> str:
+    """Plain digits without trailing zeros: Decimal("100.000") -> "100"."""
+    return f"{value.normalize():f}"
 
 
 def _require_decimal(name: str, value) -> None:

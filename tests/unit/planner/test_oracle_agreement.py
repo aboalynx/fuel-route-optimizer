@@ -1,11 +1,11 @@
-"""T005: on 50 seeded random small trips the optimizer's cost equals the brute-force optimum."""
+"""T005, T008: on 50 seeded random small trips the optimizer matches the brute-force optimum."""
 
 import random
 from decimal import Decimal
 
 import pytest
 
-from planner.optimizer import PlanStation, plan_refuelling
+from planner.optimizer import InfeasibleRoute, PlanStation, plan_refuelling
 from tests.unit.planner.oracle import oracle_cost, random_instance
 
 SEEDS = range(50)
@@ -31,5 +31,15 @@ def solve(seed):
 def test_cost_matches_the_oracle(seed):
     expected, run = solve(seed)
     if expected is None:
-        pytest.skip("infeasible instance (checked in US2)")
+        pytest.skip("infeasible instance (see test_feasibility_matches_the_oracle)")
     assert run().total_cost_usd == Decimal(expected)
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_feasibility_matches_the_oracle(seed):
+    expected, run = solve(seed)
+    if expected is None:
+        with pytest.raises(InfeasibleRoute):
+            run()
+    else:
+        run()
