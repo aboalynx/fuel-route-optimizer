@@ -6,7 +6,6 @@ import numpy as np
 import pytest
 
 from planner.geometry import (
-    arc_miles,
     chord_for_miles,
     cumulative_miles,
     densify,
@@ -76,7 +75,8 @@ def test_unit_vectors_and_chords():
 
     assert np.allclose(np.linalg.norm(vectors, axis=1), 1)
     for miles in (0.5, 10, 25):
-        assert arc_miles(chord_for_miles(miles)) == pytest.approx(miles)
+        arc = 2 * 3958.8 * math.asin(chord_for_miles(miles) / 2)  # back to miles on the sphere
+        assert arc == pytest.approx(miles)
 
 
 def test_project_onto_segment():

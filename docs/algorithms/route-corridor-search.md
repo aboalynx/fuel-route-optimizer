@@ -58,8 +58,7 @@ The station is the origin. Its projection onto segment A→B is
 **Other formulas** (`R_E = 3958.8` mi):
 
 - `unit_vectors(φ, λ) = (cos φ cos λ, cos φ sin λ, sin φ)`
-- `chord(r) = 2·sin(r / 2R_E)`
-- `arc_miles(c) = 2·R_E·asin(c/2)`
+- `chord(r) = 2·sin(r / 2R_E)` (straight-line distance between unit vectors `r` miles apart)
 
 **Why each step:**
 

@@ -75,10 +75,6 @@ def chord_for_miles(miles: float) -> float:
     return 2 * math.sin(miles / (2 * EARTH_RADIUS_MILES))
 
 
-def arc_miles(chord: float) -> float:
-    return 2 * EARTH_RADIUS_MILES * math.asin(min(1.0, chord / 2))
-
-
 def project_onto_segment(
     lat: float, lng: float, a_lat: float, a_lng: float, b_lat: float, b_lng: float
 ) -> tuple[float, float]:

@@ -9,7 +9,7 @@ import pytest
 from stations.enums import UnmatchedReason
 from stations.pipeline.build import PlaceIndexRow, UnmatchedStation
 from stations.pipeline.clean import StationRecord
-from stations.pipeline.export import write_places_gz, write_unmatched_csv
+from stations.pipeline.export import places_gz_bytes, write_bytes_atomically, write_unmatched_csv
 
 
 def station(opis_id, name, city, state):
@@ -85,7 +85,7 @@ PLACE_ROWS = [
 def test_places_gzip_header_is_fixed(tmp_path):
     path = tmp_path / "us_places.csv.gz"
 
-    write_places_gz(PLACE_ROWS, path)
+    write_bytes_atomically(path, places_gz_bytes(PLACE_ROWS))
 
     data = path.read_bytes()
     assert data[:2] == b"\x1f\x8b"
@@ -96,7 +96,7 @@ def test_places_gzip_header_is_fixed(tmp_path):
 def test_places_gzip_content(tmp_path):
     path = tmp_path / "us_places.csv.gz"
 
-    write_places_gz(PLACE_ROWS, path)
+    write_bytes_atomically(path, places_gz_bytes(PLACE_ROWS))
 
     assert gzip.decompress(path.read_bytes()).decode("utf-8") == (
         "normalised_name,display_name,state,lat,lng,population\n"
@@ -108,8 +108,8 @@ def test_places_gzip_content(tmp_path):
 def test_places_two_writes_give_identical_bytes(tmp_path):
     first, second = tmp_path / "a.csv.gz", tmp_path / "b.csv.gz"
 
-    write_places_gz(PLACE_ROWS, first)
-    write_places_gz(PLACE_ROWS, second)
+    write_bytes_atomically(first, places_gz_bytes(PLACE_ROWS))
+    write_bytes_atomically(second, places_gz_bytes(PLACE_ROWS))
 
     assert first.read_bytes() == second.read_bytes()
 
@@ -123,6 +123,6 @@ def test_places_failed_write_leaves_no_partial_file(tmp_path, monkeypatch):
     monkeypatch.setattr(os, "replace", boom)
 
     with pytest.raises(OSError, match="disk full"):
-        write_places_gz(PLACE_ROWS, path)
+        write_bytes_atomically(path, places_gz_bytes(PLACE_ROWS))
 
     assert list(tmp_path.iterdir()) == []

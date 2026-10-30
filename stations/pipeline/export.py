@@ -38,10 +38,6 @@ def places_gz_bytes(rows: Iterable[PlaceIndexRow]) -> bytes:
     return buffer.getvalue()
 
 
-def write_places_gz(rows: Iterable[PlaceIndexRow], path: Path) -> None:
-    write_bytes_atomically(path, places_gz_bytes(rows))
-
-
 def write_bytes_atomically(path: Path, data: bytes) -> None:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)

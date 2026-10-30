@@ -361,8 +361,8 @@ Do these in order:
 - [x] **Fix `.gitignore`.** Ignore `.venv/`, `__pycache__/`, `*.pyc`, `.env`, `db.sqlite3`, `.coverage`, `htmlcov/`, `.pytest_cache/`, `.ruff_cache/`, `.DS_Store`, `.local/`, `data/geonames/`, `data/cache/`, and the Spec-Kit/Claude tooling folders (`.specify/scripts/`, `.specify/templates/`, `.specify/integrations/`, `.specify/workflows/`, `.claude/`). Keep `.specify/memory/` and `specs/` tracked. Untrack committed bytecode with `git rm -r --cached --ignore-unmatch --quiet '*/__pycache__' '*.pyc'`.
 - [x] **Python version.** Python 3.13–3.14 officially (Django 6.1.2); also developed and CI-tested on 3.15. Django adds official 3.15 support in 6.1.3. The local venv runs 3.15.2. `pyproject.toml` keeps `requires-python = ">=3.13"` and ruff `target-version = "py313"`.
 - [x] **Requirements files** (pinned with `==` from the venv, except Django).
-  - `requirements.txt` (runtime): `Django>=6.1.2,<6.2`, `djangorestframework`, `django-environ`, `numpy`, `scipy`, `httpx`, `rapidfuzz`.
-  - `requirements-dev.txt`: starts with `-r requirements.txt`, then `ruff`, `pytest`, `pytest-django`, `pytest-cov`, `respx`, `pre-commit`.
+  - `requirements.txt` (runtime): `Django>=6.1.2,<6.2`, `djangorestframework`, `django-environ`, `numpy`, `scipy`, `httpx`.
+  - `requirements-dev.txt`: starts with `-r requirements.txt`, then `ruff`, `pytest`, `pytest-django`, `pytest-cov`, `respx`.
 - [x] **CI.** `.github/workflows/ci.yml`: on push and pull_request; matrix Python 3.13 / 3.14 / 3.15 (`fail-fast: false`, `allow-prereleases: true`) with pip cache, `pip install -r requirements-dev.txt`, `ruff check .`, `ruff format --check .`, `pytest --cov=planner --cov=stations --cov=routing --cov-report=term-missing`.
 - [x] **Constitution amendment** via `/speckit-constitution` (MINOR, v1.0.0 → v1.1.0), added under Principle VII: *"A bounded in-process cache (Django's built-in LocMem cache) for routing responses is permitted. It must stay optional, must not require external infrastructure, and a cache hit must not change the computed plan."*
 - [x] **Commit** `chore: complete project setup and CI` (local). CI goes green on the first push.

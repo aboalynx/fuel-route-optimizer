@@ -111,7 +111,7 @@ the coordinate-based numbers above.
 
 - Django 6.1.2, Django REST Framework
 - Python 3.13–3.14 officially (Django 6.1.2); also developed and CI-tested on 3.15. Django adds official 3.15 support in 6.1.3.
-- numpy and scipy (`cKDTree` for the spatial search), httpx, rapidfuzz
+- numpy and scipy (`cKDTree` for the spatial search), httpx
 - Routing: OSRM public demo server (no API key)
 - Database: SQLite by default, configurable via `DATABASE_URL`
 
