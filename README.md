@@ -420,7 +420,7 @@ Errors always have the body `{"error": {"code", "message", "details"}}`:
 - **Running them:** run `python -m pytest` (or `python manage.py test`, which runs the same pytest suite).
 - **Tests:** pytest with pytest-django. Unit tests cover every pure module; integration tests cover the pipeline and the API.
 - **No real network in tests.** Routing is mocked with respx and a saved OSRM sample.
-- **Coverage target:** 90%+ on `planner/` and `stations/pipeline/`, and 95%+ on the optimizer.
+- **Coverage target:** 90%+ on `planner/`, `routing/`, `api/` and `stations/pipeline/`, and 95%+ on the optimizer. CI reports coverage for `planner/`, `stations/`, `routing/` and `api/`.
 - **Linting and formatting:** `ruff check .` and `ruff format --check .`.
 - **CI:** GitHub Actions runs ruff and pytest with coverage on every push (badge above).
 

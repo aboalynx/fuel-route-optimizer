@@ -31,4 +31,4 @@ jobs:
         run: ruff format --check .
 
       - name: Tests
-        run: pytest --cov=planner --cov=stations --cov=routing --cov-report=term-missing
+        run: pytest --cov=planner --cov=stations --cov=routing --cov=api --cov-report=term-missing
