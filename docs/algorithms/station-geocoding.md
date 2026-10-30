@@ -55,6 +55,6 @@ Coffeyville"). It is still an exact key, so matching stays deterministic.
 - No network at request time or in tests.
 - Reproducible output: the command re-runs to a byte-identical fixture.
 - One normalisation serves both stations and user input.
-- Accuracy is the city centroid. The corridor radius and the optional OSM layer compensate.
+- Accuracy is the city centroid. The corridor radius compensates; exact coordinates are future work (README, "Station coordinates: current approach and production path"; one design is ADR-0004).
 - Large cities collapse many stations onto one point.
 - A few cities go unmatched. They are listed for review, and the target is ≥ 95% geocoded.

@@ -36,7 +36,7 @@ The reviewer must run everything with no keys and no geocoding step (constitutio
 
 - Zero network at request time and in tests. One normalisation serves both stations and user input.
 - Byte-identical re-runs require stable keys. `opis_id` is the station primary key, and `FuelPrice.id` is assigned explicitly as 1..N (by `opis_id`, then CSV row order), because SQLite AUTOINCREMENT and PostgreSQL sequences give new ids after a delete.
-- Several miles of positional error. The corridor radius and the optional OSM layer (ADR-0004) mitigate it.
+- Several miles of positional error. The corridor radius mitigates it; exact coordinates are future work (README, "Station coordinates: current approach and production path"; one design is ADR-0004).
 - A few cities go unmatched (target ≥ 95% geocoded).
 - The "in the USA" check for coordinates is approximate (nearest place within 25 mi).
 - `US.txt` is not committed. Only pipeline re-runs need it.

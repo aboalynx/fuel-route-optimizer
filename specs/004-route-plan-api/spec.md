@@ -222,4 +222,4 @@ gives the cheapest plan unchanged.
 - **Minimum saving per stop.** Defaults to 5 USD (roughly 10–15 minutes of a driver's time), because the pure cheapest plan is impractical (New York → Los Angeles: 6 stops instead of 16 for 1% more). 0 gives the provable minimum-cost plan, and its cost is always returned as `minimum_possible_cost_usd`. The rule gives fewer stops, not always the fewest: a plan with fewer stops using other stations could exist; finding it exactly needs a slower search over stations and fuel levels (future work).
 - **Retry hint.** When the routing service suggests no wait, the retry hint is 30 seconds.
 - **Inputs.** Coordinates are decimal degrees (latitude −90..90, longitude −180..180); "City, ST" uses US 2-letter state codes (DC included).
-- **Out of scope.** Authentication and rate limiting of this API, a truck routing profile, live prices and exact station coordinates (Feature 005).
+- **Out of scope.** Authentication and rate limiting of this API, a truck routing profile, live prices and exact station coordinates (future work).

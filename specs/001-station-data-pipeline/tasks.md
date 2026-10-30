@@ -170,7 +170,6 @@ hand-made fixture. The real shipped fixture is produced by US2's real run (T031)
   - **(f) Below threshold:** `min_geocoded_pct` above the sample's share → `CommandError`; the report is printed and the unmatched file written; DB and fixture unchanged. The same sample with a lower `min_geocoded_pct` succeeds.
   - **(g) Missing gazetteer:** `CommandError` naming the path and download URL; nothing written.
   - **(h) `no_export=True`:** the DB is written but no fixture.
-  - **(i) Skip OSM:** `skip_osm` is accepted and changes nothing.
 
 ### Implementation for User Story 2
 
@@ -217,7 +216,6 @@ hand-made fixture. The real shipped fixture is produced by US2's real run (T031)
     - `--geonames` (default `settings.GEONAMES_FILE`);
     - `--min-geocoded-pct` (float 0–100, default 95);
     - `--no-export`;
-    - `--skip-osm` (accepted no-op);
     - hidden test-only output paths: `--fixture-out`, `--unmatched-out`, `--places-out`, defaulting to the committed paths.
 - [X] T023 [US2] Run `python -m pytest tests/unit/stations tests/integration/test_build_station_data.py`. Fix until green. The test-first evidence is not checked here after the fact. Before each of T018–T022, the matching test file is run and its failing output (import or assertion errors) is shown, and that output is the record.
 

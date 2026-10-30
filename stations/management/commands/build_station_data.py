@@ -50,11 +50,6 @@ class Command(BaseCommand):
             action="store_true",
             help="Store in the database but do not write the fixture or the place lookup.",
         )
-        parser.add_argument(
-            "--skip-osm",
-            action="store_true",
-            help="Accepted for forward compatibility; OSM matching arrives in feature 005.",
-        )
         # Output locations; overridden by tests so committed files are never touched.
         parser.add_argument(
             "--fixture-out", type=Path, default=DEFAULT_FIXTURE, help=argparse.SUPPRESS

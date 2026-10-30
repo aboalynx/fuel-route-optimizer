@@ -168,16 +168,6 @@ def test_no_export_stores_but_writes_no_fixture(run, out_dirs):
     assert not out_dirs.fixture.exists()
 
 
-# (i) --skip-osm is accepted and changes nothing
-def test_skip_osm_is_a_no_op(run, out_dirs):
-    run()
-    before = snapshot(out_dirs)
-
-    run(skip_osm=True)
-
-    assert snapshot(out_dirs) == before
-
-
 # --- place lookup (US3, T026) ---------------------------------------------------------------
 
 

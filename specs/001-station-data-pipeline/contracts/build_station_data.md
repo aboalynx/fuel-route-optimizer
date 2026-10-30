@@ -10,7 +10,6 @@
 | `--manual-coordinates PATH` | `data/overrides/manual_coordinates.csv` | Reviewed coordinates that win over lookup (FR-023). A missing file means no overrides |
 | `--rejected-matches PATH` | `data/overrides/rejected_matches.csv` | Reviewed list of matches to reject (FR-022). A missing file means no rejections |
 | `--no-export` | off | Store in the DB but do not write the fixture or the place lookup |
-| `--skip-osm` | on (no-op) | Accepted for forward compatibility. OSM matching arrives in Feature 005 |
 
 ## Exit status
 

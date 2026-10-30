@@ -21,7 +21,6 @@ The vehicle has a 500-mile range and does 10 miles per gallon.
 - [x] 002 route-candidates: one routing call + KD-tree corridor search (done)
 - [x] 003 refuel-optimizer: optimal greedy refuelling plan (done)
 - [x] 004 route-plan-api: `POST /api/v1/route-plan/` + Leaflet map page (done)
-- [ ] 005 osm-precision-layer: exact station coordinates from OpenStreetMap (planned, stretch)
 
 ## How it works
 
@@ -43,7 +42,7 @@ fuel CSV                                 1. validate input
  -> places index (committed)             4. densify route, cumulative miles
  -> FuelStation + FuelPrice              5. KD-tree: stations within corridor + mile markers
  -> report + fixture stations.json       6. optimizer: cheapest refuel plan (Decimal)
- -> [stretch] OSM coordinates            7. GeoJSON + totals + timings + meta
+                                         7. GeoJSON + totals + timings + meta
 
 FIRST USE: stations + KD-tree loaded into memory once (lazy, lru_cache)
 ```
@@ -242,6 +241,36 @@ wrong match, because a wrong location is worse than a missing one.
 17. The map line in the response is thinned to at most about 5,000 points; stops, distances and costs come from the full route.
 18. Response precision: money 2 decimals (half up), gallons 4 decimals, price per gallon exactly as stored (up to 8 decimals), miles 3 decimals. For every stop, gallons × price is within half a cent of the cost shown.
 
+## Station coordinates: current approach and production path
+
+**Why not geocode at request time.** The price CSV has no coordinates. Geocoding stations while
+answering a request would add external calls (breaking the one-routing-call design), add latency,
+and depend on free services that are rate-limited and have no SLA.
+
+**What we do instead.** Stations are geocoded offline, once, at city-centre level from
+[GeoNames](https://www.geonames.org/) (CC BY 4.0), by `python manage.py build_station_data`; the
+result is the committed fixture. 6,620 of 6,626 stations are located (99.9%). The 2 stations at
+I-84 Exit 71 in Willington, CT use reviewed manual coordinates from OpenStreetMap (ODbL), because
+GeoNames has no populated place for Willington. The 6 stations whose city is not a GeoNames
+populated place are dropped and listed in `data/reports/unmatched_cities.csv`.
+
+**Trade-off.** A city centre can be a few miles from the real truck stop (often 2–5 miles). The
+corridor search uses a configurable radius (`corridor_miles` in the request, default 10 from
+`CORRIDOR_MILES`) that is wide enough that this offset does not drop real stations along the
+route. For the same reason, the off-route distances and mile markers in the response are
+approximate.
+
+**Production path.** An offline background job fills in exact station coordinates; requests never
+geocode.
+
+- **Preferred source:** the fuel-price data provider's own station feed (OPIS supplies station
+  locations), which links coordinates to the same station IDs as the prices.
+- **Alternatives:** a commercial geocoding or places API whose licence allows storing results
+  (Google Maps Platform terms restrict long-term storage of coordinates), or OpenStreetMap through
+  a self-hosted Overpass or Nominatim instance (the public servers have no SLA).
+- **What it enables:** with exact coordinates, the default corridor can be tightened to a few
+  miles, and the fuel used for the detour to an off-route station can be counted.
+
 ## API
 
 ```http
@@ -308,7 +337,7 @@ Errors always have the body `{"error": {"code", "message", "details"}}`:
 ## Testing and quality
 
 - **Tests:** pytest with pytest-django. Unit tests cover every pure module; integration tests cover the pipeline and the API.
-- **No real network in tests.** Routing and Overpass are mocked with respx or saved samples.
+- **No real network in tests.** Routing is mocked with respx and a saved OSRM sample.
 - **Coverage target:** 90%+ on `planner/` and `stations/pipeline/`, and 95%+ on the optimizer.
 - **Linting and formatting:** `ruff check .` and `ruff format --check .`.
 - **CI:** GitHub Actions runs ruff and pytest with coverage on every push (badge above).
@@ -326,14 +355,14 @@ any part of it.
 ## Data attribution
 
 - City coordinates and the committed place lookup (`data/places/us_places.csv.gz`) come from [GeoNames](https://www.geonames.org/), licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). The place lookup redistributes GeoNames data.
-- Station coordinates in `data/overrides/manual_coordinates.csv` come from OpenStreetMap: © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright), available under the [Open Database License (ODbL)](https://opendatacommons.org/licenses/odbl/).
+- The 2 station coordinates in `data/overrides/manual_coordinates.csv` and the map tiles on the map page come from OpenStreetMap: © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright), available under the [Open Database License (ODbL)](https://opendatacommons.org/licenses/odbl/). The map page shows this attribution on the map.
 
 ## Future work
 
 - PostgreSQL + PostGIS with a spatial index instead of the in-memory KD-tree
-- Exact station coordinates
+- Exact station coordinates from a licensed source or OpenStreetMap name/brand matching (design: [docs/algorithms/osm-name-matching.md](docs/algorithms/osm-name-matching.md), [ADR-0004](docs/adr/0004-osm-fuzzy-name-matching.md)); see "Station coordinates: current approach and production path"
 - Use GeoNames admin areas (towns and townships, class A/ADM3) as an extra tier before alternate names. That would locate Willington CT without a manual override and recover Crescent PA and Corinth ME.
-- Detour cost for off-route stations
+- Detour cost for off-route stations, and a tighter default corridor, once coordinates are exact
 - Live prices
 - A truck routing profile
 - The fewest possible stops for a given minimum saving (an exact search over stations and fuel levels); today's rule only removes stops from the cheapest plan

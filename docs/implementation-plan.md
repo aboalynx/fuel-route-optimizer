@@ -4,14 +4,14 @@
 | --- | --- |
 | Constitution | `.specify/memory/constitution.md` (v1.1.0 after the Phase 0 amendment) |
 | Workflow | Spec-Kit, one feature at a time (Section 7) |
-| Features | 001 station-data-pipeline · 002 route-candidates · 003 refuel-optimizer · 004 route-plan-api · 005 osm-precision-layer (stretch) |
+| Features | 001 station-data-pipeline · 002 route-candidates · 003 refuel-optimizer · 004 route-plan-api |
 
 This document is the entry point for building the project with Spec-Kit. It covers:
 
 - the requirements, with stable IDs;
 - the decisions;
 - the architecture;
-- the work, split into five Spec-Kit features. Each feature has paste-ready inputs for `/speckit-specify` and `/speckit-plan`.
+- the work, split into four Spec-Kit features. Each feature has paste-ready inputs for `/speckit-specify` and `/speckit-plan`.
 
 Section 10 maps every requirement, decision, deliverable and test to a feature.
 
@@ -20,7 +20,7 @@ Section 10 maps every requirement, decision, deliverable and test to a feature.
 | Optimal refuelling (greedy "next cheaper station") | [algorithms/refuelling-greedy.md](algorithms/refuelling-greedy.md) | [ADR-0001](adr/0001-greedy-refuelling-optimizer.md) |
 | Route corridor search (densifying, KD-tree, mile markers) | [algorithms/route-corridor-search.md](algorithms/route-corridor-search.md) | [ADR-0002](adr/0002-kdtree-corridor-search.md) |
 | Offline station geocoding (GeoNames city centroids) | [algorithms/station-geocoding.md](algorithms/station-geocoding.md) | [ADR-0003](adr/0003-offline-centroid-geocoding.md) |
-| OSM precision matching (fuzzy name matching) | [algorithms/osm-name-matching.md](algorithms/osm-name-matching.md) | [ADR-0004](adr/0004-osm-fuzzy-name-matching.md) |
+| OSM precision matching (fuzzy name matching): future work, not implemented | [algorithms/osm-name-matching.md](algorithms/osm-name-matching.md) | [ADR-0004](adr/0004-osm-fuzzy-name-matching.md) |
 
 ---
 
@@ -138,7 +138,7 @@ Address, City, State, Rack ID, Retail Price`. There are no coordinates.
 | D6 | Map output | GeoJSON `FeatureCollection` (route LineString + stop Points) and a Leaflet page | 004 |
 | D7 | Storage | SQLite by default for zero-setup review. The database is configurable with `DATABASE_URL` (django-environ), e.g. PostgreSQL; psycopg is not in `requirements.txt`. Production path: PostgreSQL + PostGIS, where a spatial index would replace the in-memory KD-tree. Two tables plus a committed fixture; stations are held in memory after first use | 001, 002 |
 | D8 | HTTP method | `POST /api/v1/route-plan/` with a JSON body. `GET` with query params is **optional**, and the first thing to drop if time is short | 004 |
-| D9 | Station coordinates | City-centroid baseline, then offline OSM matching (stretch) with `--skip-osm` | 001, 005 |
+| D9 | Station coordinates | City-centre coordinates (GeoNames), plus reviewed manual overrides | 001 |
 | D10 | Money in JSON | `Decimal` internally. JSON numbers at the boundary: USD 2 dp (ROUND_HALF_UP), gallons 4 dp, price per gallon exact as stored (up to 8 dp). Total = sum of the rounded per-stop costs. Shown gallons × shown price is within half a cent of the shown cost (exact gallons at the default 10 mpg, so only the cent rounding differs). Updated in 004's clarification: with price 3 dp and gallons 2 dp a reviewer's check could be off by a few cents | 003, 004 |
 
 ### 4.3 Remaining tensions with the constitution
@@ -174,7 +174,7 @@ fuel CSV                                 1. validate input
  -> places index (committed)             4. densify route, cumulative miles
  -> FuelStation + FuelPrice              5. KD-tree: stations within corridor + mile markers
  -> report + fixture stations.json       6. optimizer: cheapest refuel plan (Decimal)
- -> [stretch] OSM coordinates            7. GeoJSON + totals + timings + meta
+                                         7. GeoJSON + totals + timings + meta
 
 FIRST USE: stations + KD-tree loaded into memory once (lazy, lru_cache)
 ```
@@ -187,7 +187,6 @@ FIRST USE: stations + KD-tree loaded into memory once (lazy, lru_cache)
 | `stations/enums.py` | `GeoSource` (`StrEnum`): fixed value sets shared by models and pipeline | No |
 | `stations/pipeline/clean.py` | CSV parsing, stripping, Canada filter, `Decimal` prices, grouping | No |
 | `stations/pipeline/geonames.py` | GeoNames streaming, `normalise_place_name()`, lookup, places index export | No |
-| `stations/pipeline/osm.py`, `matching.py` | Overpass fetch with disk cache; name cleaning and fuzzy matching (Feature 005) | No |
 | `stations/services/station_data.py` | Rebuild service: runs the pure pipeline, stores atomically, exports the fixture, place lookup and unmatched file | Yes |
 | `stations/management/commands/build_station_data.py` | Thin: parses flags, calls the rebuild service, prints the report, maps errors to exit codes | Yes |
 | `stations/services/index_loader.py` | Station index service: in-memory arrays (ID, coordinates, exact price, name, address, city, state, `geo_source`) + KD-tree, built lazily once; raises `StationDataMissing` when empty | Reads the model once; restart for new data |
@@ -205,7 +204,8 @@ FIRST USE: stations + KD-tree loaded into memory once (lazy, lru_cache)
 # stations/enums.py (pure Python, no Django)
 class GeoSource(StrEnum):
     CITY_CENTROID = "city_centroid"
-    OSM = "osm"
+    MANUAL = "manual"  # reviewed override, data/overrides/manual_coordinates.csv
+    OSM = "osm"  # reserved: kept in the choices for the future OSM precision layer; never set today
     # .label and .choices() give the model field its (value, label) choices
 
 
@@ -320,13 +320,13 @@ This table is updated in the Phase 0 commit: tick each Phase 0 item off as done.
 
 Feature numbering is sequential (`.specify/init-options.json`), so `/speckit-specify` creates
 `specs/001-…`, `specs/002-…` and so on **in creation order**. Run `/speckit-specify` for the
-features in the order of this document (001 → 005), even if 003 is built alongside 002, so the
+features in the order of this document (001 → 004), even if 003 is built alongside 002, so the
 `specs/00N-*` folders match the numbers used here.
 
 For each feature:
 
 1. `/speckit-specify` with the **Specify input** block. It covers behaviour and acceptance only.
-2. `/speckit-clarify` **only for 001 and 003**, using their **Clarify points** (recommended answers are given). For 002 and 004 the points are already decided and are part of the Specify input. 005 has fixed steps.
+2. `/speckit-clarify` **only for 001 and 003**, using their **Clarify points** (recommended answers are given). For 002 and 004 the points are already decided and are part of the Specify input.
 3. `/speckit-plan` with the **Plan input** block. It covers technical notes and links to the algorithm doc and ADR.
 4. `/speckit-tasks`. Run `/speckit-analyze` (constitution and consistency check) **only for 003**, where money correctness is concentrated.
 5. `/speckit-implement`, tests first (Principle IV). The feature is done only when its tests are green in CI.
@@ -347,12 +347,10 @@ Phase 0  setup completion + constitution amendment          ~1 h
                    |
 004 route-plan-api (API + map page)                         ~3 h
                    |
-005 osm-precision-layer (stretch, only if time allows)      ~2-3 h
-                   |
 Release  README, Postman, coverage, demo video              ~3 h
 ```
 
-Ship 001–004 and Release first. 005 is optional. If time is short, drop the optional GET endpoint (D8) first.
+Ship 001–004 and Release. If time is short, drop the optional GET endpoint (D8) first.
 
 ---
 
@@ -387,7 +385,7 @@ fixture. Also export the committed places index used to resolve `"City, ST"` inp
 **Pipeline steps** (all inside `python manage.py build_station_data`)
 
 Flags: `--csv` (default `settings.FUEL_PRICES_CSV`), `--geonames` (default `settings.GEONAMES_FILE`),
-`--skip-osm` (on by default until Feature 005 exists), `--no-export`, `--min-geocoded-pct` (default 95).
+`--no-export`, `--min-geocoded-pct` (default 95).
 If the located share is below `--min-geocoded-pct`, the command prints the report and writes
 `data/reports/unmatched_cities.csv`. It then exits non-zero **before** storing or exporting, so the DB and fixture stay
 unchanged. If the GeoNames file is
@@ -496,7 +494,7 @@ spelling) and stations/pipeline/geonames.py (stream US.txt, class P minus PPLH/P
 normalise_place_name, primary lookup from name+asciiname, alternate-name fallback, tie rule
 population desc then geonameid asc, places index export). Management command build_station_data
 with --csv (default settings.FUEL_PRICES_CSV), --geonames (default settings.GEONAMES_FILE),
---skip-osm (default on), --no-export, --min-geocoded-pct (default 95; below it: report + unmatched
+--no-export, --min-geocoded-pct (default 95; below it: report + unmatched
 file, exit non-zero, nothing stored or exported). FuelStation.opis_id is the primary key. Store inside
 transaction.atomic(): delete all, bulk_create stations sorted by opis_id, assign FuelPrice.id
 explicitly as 1..N (order: opis_id, then CSV row order), bulk_create prices. Reason: SQLite
@@ -522,7 +520,7 @@ assumptions (Canada excluded, minimum price, centroid coordinates) in the same c
   - precision: a price of `3.00733333` survives clean → `bulk_create` → DB read → fixture → `loaddata` exactly (`== Decimal("3.00733333")`). The sample CSV includes such a row.
   - `normalise_place_name` cases.
   - lookup: tie rule, alternate-name fallback, unmatched.
-- **Integration** (pytest-django): run the command on both samples with `--skip-osm`. Check both tables, the report, the unmatched file, the places index, the fixture, and that a second run is identical.
+- **Integration** (pytest-django): run the command on both samples. Check both tables, the report, the unmatched file, the places index, the fixture, and that a second run is identical.
 
 **Done when:** the fixture and places index are committed, the report numbers are in the README, and CI is green. Load and rebuild times are measured once by hand (targets: load < 1 min, rebuild < 5 min) and written in the README with the machine, e.g. "Load: 4 s. Full rebuild: 48 s (2018 Intel MacBook Pro)". They are not asserted in CI, because `US.txt` is not on the runner and runner timings vary.
 
@@ -818,76 +816,14 @@ and a small station fixture.
 
 ---
 
-### Feature 005: osm-precision-layer (stretch, only if time allows)
+### Future work: OSM precision layer (not implemented)
 
-**Goal:** replace city-centroid coordinates with exact OpenStreetMap coordinates where a station
-can be matched confidently. This runs offline, never at request time.
-
-- **Covers:** D9 (precision); README match-rate numbers.
-- **Depends on:** 001.
-- **Constitution:** I (deterministic matching), II (Overpass is offline only), IV (saved samples, no live API), VIII (fixture stays committed).
-- **Algorithm:** [osm-name-matching.md](algorithms/osm-name-matching.md) · [ADR-0004](adr/0004-osm-fuzzy-name-matching.md)
-
-**Steps:**
-
-1. **Fetch** (`stations/pipeline/osm.py`):
-   - Run one Overpass query per state: area `ISO3166-2=US-XX`; `node` and `way` with `amenity=fuel`; `out center tags`.
-   - POST to `https://overpass-api.de/api/interpreter` with a 200 s timeout, one query at a time, pausing between queries.
-   - Cache each response to `data/cache/osm/<STATE>.json`. A re-run reads only the cache.
-2. **Match** (`stations/pipeline/matching.py`):
-   - Clean names: lower-case; remove store numbers like `#1243`; remove the generic words travel center(s), travel plaza, truck stop, dba; collapse spaces.
-   - Score = max of `rapidfuzz.fuzz.token_set_ratio` against the OSM `name` and against the OSM `brand`.
-   - Candidates = OSM stations within 15 miles of the station's city centroid (KD-tree on 3D unit vectors).
-3. **Decide:**
-   - Accept only a score ≥ 85 with a single clear winner. A tie keeps the city centroid.
-   - One OSM element maps to at most one OPIS station. The higher score wins; on a tie the lower `opis_id` wins. The loser keeps its centroid.
-4. **Apply:**
-   - Accepted matches set `lat`/`lng` from OSM, `geo_source = GeoSource.OSM`, `match_score = score`.
-   - The report adds osm / city_centroid / dropped percentages.
-   - Regenerate and commit the fixture, and update the README numbers.
-
-**Specify input:**
-
-```text
-Extend the offline station-data pipeline with an optional precision step. For each US state, fetch
-all fuel stations from OpenStreetMap once and cache them on disk, so re-runs make no network calls. For each
-priced station, consider OpenStreetMap stations near its city and match by cleaned name/brand
-similarity. Accept a match only when the score is at least 85 and there is a single clear winner;
-otherwise keep the city coordinates. An OpenStreetMap station is assigned to at most one priced
-station, by a fixed rule. Record the coordinate source and match score per station. The report adds
-precise / city-centroid / dropped percentages. The step can be skipped with a flag, and the
-project works fully without it.
-
-Acceptance: re-running uses only the disk cache; tied candidates never move a station;
-below-threshold candidates are rejected; the regenerated data file is committed with updated README
-numbers.
-```
-
-**Plan input:**
-
-```text
-stations/pipeline/osm.py: fetch_state(state, cache_dir) builds the Overpass QL (area
-ISO3166-2=US-XX; node+way amenity=fuel; out center tags), httpx POST to
-https://overpass-api.de/api/interpreter timeout 200 s, one at a time with a pause, writes
-data/cache/osm/<STATE>.json, reads the cache when present. stations/pipeline/matching.py:
-clean_name, score = max(token_set_ratio vs name, vs brand), candidates within 15 mi of the
-centroid via cKDTree on 3D unit vectors, accept >= 85 with a unique top score, global de-conflict
-(higher score wins, tie -> lower opis_id; loser keeps centroid). build_station_data without
---skip-osm applies it. Algorithm docs/algorithms/osm-name-matching.md; decision docs/adr/0004.
-Tests use tests/fixtures/overpass_sample.json and respx.
-```
-
-**Tests:**
-
-- a cache hit on the second run (respx asserts no second HTTP call);
-- way elements use `center`;
-- name cleaning cases;
-- match accepted;
-- tie keeps the centroid;
-- below threshold keeps the centroid;
-- de-conflict (higher score wins; tie → lower `opis_id`).
-
-**Done when:** the fixture is regenerated, the match rate is in the README, and CI is green.
+Exact station coordinates by matching each priced station to an OpenStreetMap fuel station near its
+city by cleaned name/brand similarity, offline, with a disk cache and a unique-winner rule. It was
+designed but is not part of this project. Design:
+[algorithms/osm-name-matching.md](algorithms/osm-name-matching.md) ·
+[ADR-0004](adr/0004-osm-fuzzy-name-matching.md) (Proposed, not implemented). The README section
+"Station coordinates: current approach and production path" describes the production options.
 
 ---
 
@@ -932,11 +868,11 @@ Tests use tests/fixtures/overpass_sample.json and respx.
 | F6 | 001 | D6 | 004 |
 | F7 | 002 | D7 | 001, 002 |
 | N1 | Phase 0 | D8 | 004 |
-| N2 | 002, 004, Release (measurements) | D9 | 001, 005 |
+| N2 | 002, 004, Release (measurements) | D9 | 001 |
 | N3 | 002, 004 | D10 | 003, 004 |
 | N4 | 001, Phase 0, Release | D11 | Phase 0 (amendment), 004 |
 | N5 | Release | DL1 | all (commit per step) |
-| DL2 | Release (+ README updates in 001, 003, 004, 005) | DL3 | 001 |
+| DL2 | Release (+ README updates in 001, 003, 004) | DL3 | 001 |
 | DL4 | 004 | DL5 | 004 |
 | DL6 | Phase 0 (CI), every feature | DL7 | Release |
 | DL8 | Release | DL9 | 004 |
@@ -948,9 +884,7 @@ Tests use tests/fixtures/overpass_sample.json and respx.
 | Pipeline | clean: Canada dropped, values stripped, Decimal, grouping | Step 1 rules | 001 |
 | Pipeline | one station per OPIS ID, all rows kept, `best_price` = min, first spelling | D2 | 001 |
 | Pipeline | `normalise_place_name` cases; tie rule; alternate-name fallback; PPLH ignored | Step 2 | 001 |
-| Pipeline | command end to end on samples (`--skip-osm`), second run identical | Steps 1–7, idempotence | 001 |
-| Pipeline | OSM fetch uses the disk cache on the second run | No repeated Overpass calls | 005 |
-| Pipeline | matching: accept, tie, below threshold, de-conflict | Matching never guesses | 005 |
+| Pipeline | command end to end on samples, second run identical | Steps 1–7, idempotence | 001 |
 | Routing | OSRM: `lng,lat` order, meters → miles, GeoJSON parsed, errors mapped | One call, clean failures | 002 |
 | Routing | factory reads `ROUTING_PROVIDER` | Provider swap needs no code change | 002 |
 | Geometry | mile markers on a synthetic line; radius in/out; latitude; sparse segment | Corridor is correct in miles | 002 |

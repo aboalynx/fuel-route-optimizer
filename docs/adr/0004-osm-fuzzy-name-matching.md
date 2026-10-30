@@ -1,7 +1,7 @@
 # ADR-0004: Offline OSM matching with fuzzy names and a unique-winner rule
 
-- Status: Accepted (stretch; ships only if time allows) · Date: 2026-10-29
-- Related: [osm-name-matching.md](../algorithms/osm-name-matching.md), Feature 005, D9
+- Status: Proposed, not implemented · Date: 2026-10-29
+- Related: [osm-name-matching.md](../algorithms/osm-name-matching.md), D9 (future work)
 
 ## Context
 
@@ -32,7 +32,7 @@ cached and deterministic.
 ## Consequences
 
 - Precise coordinates for confident matches. Ties and weak scores never move a station.
-- Deterministic and offline after the first fetch. `--skip-osm` keeps the baseline.
+- Deterministic and offline after the first fetch. It would be an optional build step; the city-centre baseline stays the default.
 - Recall is incomplete, and the thresholds are judgement calls exposed in the report.
-- Overpass is shared and rate-limited, which is why this feature is last and optional.
+- Overpass is shared and rate-limited, one reason it is not implemented in this project.
 - ODbL attribution is required in the README.

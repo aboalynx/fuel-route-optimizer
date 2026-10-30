@@ -102,7 +102,6 @@ marked *measured* come from a read-only feasibility scan of the real `data/geona
   - `--geonames`
   - `--min-geocoded-pct` (float, default 95, range 0–100)
   - `--no-export`
-  - `--skip-osm`: accepted but a no-op in this feature. It is the only behaviour until Feature 005, and accepting it now keeps the command contract stable.
 - **Missing gazetteer:** `CommandError` naming the expected path and the download URL (`https://download.geonames.org/export/dump/US.zip`).
 - **Rationale:** this is the standard Django entry point, so a reviewer finds it with `python manage.py help`.
 
@@ -133,7 +132,7 @@ marked *measured* come from a read-only feasibility scan of the real `data/geona
 - **Values:** both Willington stations use OSM node 10857848288 (Love's, I-84 Exit 71, Ruby Rd): 41.9256406, -72.2598092. The TA at the same exit is not mapped in OSM, so it uses the adjacent Love's.
 - **Rationale:** these are real truck stops on a major interstate. Dropping them loses two valid options, and the rejected-match approach only avoided a wrong point. A reviewed OSM point is verifiable, because the source URL is in the file.
 - **Guards:** the contiguous-US bounding box (lat 24 to 50, lng -125 to -66), a known station ID, no duplicates, and an OSM source. Every problem is reported with its line number, before anything is written.
-- **Licence:** OSM data is ODbL. The README must credit © OpenStreetMap contributors now, not only if Feature 005 ships.
+- **Licence:** OSM data is ODbL. The README must credit © OpenStreetMap contributors now, regardless of any future OpenStreetMap work.
 - **Expected:** 6,620 located (99.9%), 6 unmatched, 2 manual.
 
 ## R10. Testing approach (constitution IV)

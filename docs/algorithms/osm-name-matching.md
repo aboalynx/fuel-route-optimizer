@@ -1,6 +1,6 @@
 # Algorithm: OSM precision layer (fuzzy name matching)
 
-Modules `stations/pipeline/osm.py`, `stations/pipeline/matching.py` · Feature 005 (stretch) · [ADR-0004](../adr/0004-osm-fuzzy-name-matching.md)
+**Future work, not implemented.** Proposed modules `stations/pipeline/osm.py`, `stations/pipeline/matching.py` · [ADR-0004](../adr/0004-osm-fuzzy-name-matching.md)
 
 ## Context
 
@@ -48,6 +48,6 @@ constants, and the report shows their effect (osm / city_centroid / dropped perc
 - Precise coordinates for confident matches.
 - Ties and weak scores never move a station, so precision is chosen over recall.
 - Deterministic, and network-free after the first fetch. Tests use a saved Overpass sample.
-- Optional: `--skip-osm` keeps the baseline.
+- Optional: the city-centre baseline stays the default.
 - Recall is incomplete, and the thresholds are judgement calls.
 - OSM data is ODbL, so the README must attribute it.

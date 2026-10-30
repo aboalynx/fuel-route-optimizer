@@ -14,8 +14,8 @@ One physical US truck stop that was located.
 | `city` | `CharField(80)` | From the first row, trimmed, original casing |
 | `state` | `CharField(2, db_index=True)` | US state or DC code |
 | `lat`, `lng` | `FloatField(null=True)` | City-centre coordinates. Never null for stored stations in this feature |
-| `geo_source` | `CharField(20, choices=GeoSource.choices())` | `GeoSource` `StrEnum` (`stations/enums.py`): `CITY_CENTROID = "city_centroid"`, `MANUAL = "manual"`, `OSM = "osm"`. `CITY_CENTROID` for a gazetteer match, `MANUAL` for a reviewed override (FR-023). Migration `0002` adds `manual` to the choices |
-| `match_score` | `PositiveSmallIntegerField(null=True)` | Always null in 001; reserved for Feature 005 |
+| `geo_source` | `CharField(20, choices=GeoSource.choices())` | `GeoSource` `StrEnum` (`stations/enums.py`): `CITY_CENTROID = "city_centroid"`, `MANUAL = "manual"`, `OSM = "osm"`. `CITY_CENTROID` for a gazetteer match, `MANUAL` for a reviewed override (FR-023). Migration `0002` adds `manual` to the choices. `OSM` is reserved for the OpenStreetMap precision layer, which is future work and not implemented; no station has it |
+| `match_score` | `PositiveSmallIntegerField(null=True)` | Always null; reserved for the OpenStreetMap precision layer (future work, not implemented) |
 | `best_price` | `DecimalField(12, 8)` | Minimum of the station's price rows (FR-005), exact (FR-007) |
 
 There is no `Meta.ordering`, so `dumpdata` orders by primary key (R5).
