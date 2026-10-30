@@ -19,7 +19,7 @@
 
 ### Session 2026-10-30
 
-- Q: The cheapest plan is impractical on the map (New York → Los Angeles: 16 stops, some of 1–2 gallons a few miles apart). What should the default be? → A: The API and the page both default `min_saving_per_stop_usd` to 5 USD; 0 still gives the pure cheapest plan. For transparency the summary also returns `minimum_possible_cost_usd` (the plan with 0, computed in the same request, no extra routing call), and the page shows it next to the total, e.g. "$700.38 (cheapest possible $693.26 with 16 stops)". Oracle and optimality tests keep using 0. The Postman collection includes one request with 0.
+- Q: The cheapest plan is impractical on the map (New York → Los Angeles: 16 stops, some of 1–2 gallons a few miles apart). What should the default be? → A: The API and the page both default `min_saving_per_stop_usd` to 5 USD; 0 still gives the pure cheapest plan. For transparency the summary also returns `minimum_possible_cost_usd` (the plan with 0, computed in the same request, no extra routing call), and the page shows it next to the total, e.g. "$700.38 (cheapest possible $693.26 with 16 stops)". *(Page wording refined the same day: the cheapest plan is its own row, "Cheapest possible: $693.26 with 16 stops", and the Stops row says "6 (10 small stops skipped, +$7.12)", so the cheapest plan's stop count is not read as the shown plan's.)* Oracle and optimality tests keep using 0. The Postman collection includes one request with 0.
 
 ## User Scenarios & Testing *(mandatory)*
 

@@ -169,7 +169,7 @@
             ""
           ]
         },
-        "description": "A long route with the default: 6 stops, $700.38 (cheapest possible $693.26 with 16 stops).",
+        "description": "A long route with the default: 6 stops, $700.38. summary.minimum_possible_cost_usd = $693.26, the cheapest plan, which needs 16 stops.",
         "body": {
           "mode": "raw",
           "raw": "{\n  \"start\": \"New York, NY\",\n  \"finish\": \"Los Angeles, CA\"\n}",

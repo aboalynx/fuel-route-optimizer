@@ -33,4 +33,6 @@ def test_page_defaults_to_the_api_minimum_saving_and_shows_the_cheapest_cost(cli
     field = 'name="min_saving_per_stop_usd" type="number" min="0" max="100" step="any" value="5"'
     assert field in html
     assert "minimum_possible_cost_usd" in html
-    assert "cheapest possible" in html
+    # The cheapest plan gets its own labelled row, so its stop count is never read as this plan's.
+    assert 'row(list, "Cheapest possible"' in html
+    assert "small stop" in html and "skipped, +" in html

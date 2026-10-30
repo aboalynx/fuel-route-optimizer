@@ -151,11 +151,14 @@
     row(list, "From", plan.start.name || plan.start.query);
     row(list, "To", plan.finish.name || plan.finish.query);
     row(list, "Distance", `${Number(s.distance_miles).toFixed(1)} mi`);
-    const cheapestStops = s.stops_count + s.stops_dropped;
-    row(list, "Total fuel cost", s.stops_dropped
-      ? `${usd(s.total_fuel_cost_usd)} (cheapest possible ${usd(s.minimum_possible_cost_usd)} with ${cheapestStops} stops)`
-      : usd(s.total_fuel_cost_usd));
-    row(list, "Stops", `${s.stops_count}`);
+    row(list, "Total fuel cost", usd(s.total_fuel_cost_usd));
+    if (s.stops_dropped) {
+      const small = s.stops_dropped === 1 ? "1 small stop" : `${s.stops_dropped} small stops`;
+      row(list, "Stops", `${s.stops_count} (${small} skipped, +${usd(s.extra_cost_vs_cheapest_usd)})`);
+      row(list, "Cheapest possible", `${usd(s.minimum_possible_cost_usd)} with ${s.stops_count + s.stops_dropped} stops`);
+    } else {
+      row(list, "Stops", `${s.stops_count}`);
+    }
     row(list, "Gallons bought", `${s.gallons_purchased}`);
     row(list, "Routing calls", `${plan.meta.routing_calls}${plan.meta.cached ? " (cached)" : ""}`);
     row(list, "Total time", `${plan.meta.timings_ms.total} ms`);
