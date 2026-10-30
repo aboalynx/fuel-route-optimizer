@@ -200,7 +200,7 @@ cities.
 - **SC-004**: Two consecutive rebuilds produce identical record identifiers, and byte-for-byte identical copies of all three output files: station data, unmatched cities and place lookup.
 - **SC-005**: A reviewer on a fresh checkout with no network access has all station data available after one load command. The load takes under 1 minute on a typical laptop.
 - **SC-006**: The rebuild from the provided price file completes in under 5 minutes on a typical laptop.
-- **How SC-005 and SC-006 are checked:** they are measured manually, once, on the developer's laptop. The measured times and the machine are recorded in the project documentation (e.g. "Load: 4 s. Full rebuild: 48 s (2018 Intel MacBook Pro)"). They are not automated checks: the rebuild needs the gazetteer, which is not in the repository, and timings on shared build machines vary.
+- **How SC-005 and SC-006 are checked:** they are measured manually, once, on the developer's laptop. The measured times are recorded in the project documentation (e.g. "Load: 4 s. Full rebuild: 48 s"). They are not automated checks: the rebuild needs the gazetteer, which is not in the repository, and timings on shared build machines vary.
 - **SC-007**: The shipped place lookup is under 10 MB, and the shipped station data is under 50 MB. Both are far below common repository file-size limits.
 
 ## Assumptions

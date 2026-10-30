@@ -522,7 +522,7 @@ assumptions (Canada excluded, minimum price, centroid coordinates) in the same c
   - lookup: tie rule, alternate-name fallback, unmatched.
 - **Integration** (pytest-django): run the command on both samples. Check both tables, the report, the unmatched file, the places index, the fixture, and that a second run is identical.
 
-**Done when:** the fixture and places index are committed, the report numbers are in the README, and CI is green. Load and rebuild times are measured once by hand (targets: load < 1 min, rebuild < 5 min) and written in the README with the machine, e.g. "Load: 4 s. Full rebuild: 48 s (2018 Intel MacBook Pro)". They are not asserted in CI, because `US.txt` is not on the runner and runner timings vary.
+**Done when:** the fixture and places index are committed, the report numbers are in the README, and CI is green. Load and rebuild times are measured once by hand (targets: load < 1 min, rebuild < 5 min) and written in the README, e.g. "Load: 4 s. Full rebuild: 48 s". They are not asserted in CI, because `US.txt` is not on the runner and runner timings vary.
 
 ---
 
