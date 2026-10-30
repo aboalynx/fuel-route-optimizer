@@ -54,7 +54,7 @@ short):
 - Money: miles are quantized to `Decimal` 0.001 before the call, and every value inside is `Decimal`. Prices arrive unrounded (up to 8 dp). Inside the loop, fuel is held in miles of range (`gallons × mpg`), so every sum is exact for any mpg; gallons are computed only for the reported values.
 - Rounding: happens once, when the plan is built (the money output), ROUND_HALF_UP to cents per stop. The total is the sum of the rounded stop costs. The API only formats.
 - Infeasible details: `InfeasibleRoute` carries the reason (`station gap` or `start fuel insufficient`), the gap start and end miles and the usable range; for start fuel it also carries the start fuel and the gallons short.
-- Complexity: `O(n·w)` with `w` = stations within 500 mi. Measured: 0.8 ms on the 202 real Dallas → Chicago candidates, 1.2 ms on 400 stations over 3,000 miles (2018 MacBook Pro).
+- Complexity: `O(n·w)` with `w` = stations within 500 mi. Measured: 0.8 ms on the 202 real Dallas → Chicago candidates, 1.2 ms on 400 stations over 3,000 miles (developer laptop).
 
 ## Fewer stops (optional, Feature 004)
 

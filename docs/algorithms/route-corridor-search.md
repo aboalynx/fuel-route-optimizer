@@ -69,7 +69,7 @@ The station is the origin. Its projection onto segment A→B is
   nearest-neighbour query of the ~6,600 stations against a tree of the route gives the same set of
   candidates (a station is within `r + s/2` of some route point iff its nearest route point is),
   plus the nearest point that step 2 needs. Measured: 27 ms on the real Dallas → Chicago route,
-  54 ms on a synthetic 3,423-mile route (2018 MacBook Pro).
+  54 ms on a synthetic 3,423-mile route (developer laptop).
 - **Densifying, not resampling.** Interstate vertices can be 20+ miles apart, so points are inserted. Every original point is kept, so the densified segments are sub-segments of the real polyline. Replacing the polyline with evenly spaced samples would cut corners: on a 1-mile-radius curve, a 1-mile chord is about 0.125 mi from the road.
 - **Rescale check.** Mile markers are rescaled to the provider distance. If provider distance ÷ geometry length is outside 0.95–1.05, a warning is logged.
 - **Gathering with `r + s/2`.** No station within `r` is missed.

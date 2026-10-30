@@ -165,7 +165,7 @@ coordinates rounded to 4 decimals. A repeat request makes 0 routing calls. Only 
 cached, never the plan, so changing start fuel, radius, reserve or minimum saving re-plans on the
 cached route. Failures are never cached.
 
-**Measured on a 2018 MacBook Pro (Intel i7-8750H, Python 3.15.2):**
+**Measured on a developer laptop:**
 
 - Dallas, TX → Chicago, IL routing call: 966.5 miles, 9,149 route points, 0.5–0.8 s.
 - Corridor search (10-mile radius) on that route: 202 candidate stations in 27 ms.
@@ -174,7 +174,7 @@ cached route. Failures are never cached.
 - Refuelling plan on the 202 Dallas → Chicago candidates: 4 stops, $134.64, in 0.8 ms.
 - Refuelling plan on a synthetic 3,000-mile route with 400 stations: 1.2 ms.
 
-**Measured API requests (same machine, real OSRM, `runserver`):**
+**Measured API requests (same laptop, real OSRM, `runserver`):**
 
 | Request | Result | `routing_calls` | `timings_ms.total` |
 | --- | --- | --- | --- |
@@ -243,7 +243,7 @@ nothing else. The shipped data was built with the default threshold of 95%.
 After `build_station_data` or `loaddata`, restart the server to pick up the new station data.
 (`runserver` does not reload on data changes, only on code changes.)
 
-**Measured on a 2018 MacBook Pro (Intel i7-8750H, Python 3.15.2):** full rebuild 11.0 s, and
+**Measured on a developer laptop:** full rebuild 11.0 s, and
 `loaddata stations` into a fresh database 10.1 s.
 
 ## Configuration

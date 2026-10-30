@@ -282,7 +282,7 @@ hand-made fixture. The real shipped fixture is produced by US2's real run (T031)
 - [X] T033 [P] Update `README.md`:
   - **Status:** mark 001 done.
   - **"Data and assumptions":** the real report numbers from T031 replace the "TBD after feature 001" text, along with the unmatched-cities file path and the threshold used (95%).
-  - **Timings:** measured load and rebuild times with the machine (e.g. "Load: N s. Full rebuild: N s (2018 Intel MacBook Pro)").
+  - **Timings:** measured load and rebuild times with the machine (e.g. "Load: N s. Full rebuild: N s").
   - **Setup:** add `python manage.py loaddata stations`.
   - **"Data attribution":** GeoNames, CC BY 4.0, because the committed place lookup redistributes GeoNames data.
   - **Rebuild instructions:** download `US.zip` to `data/geonames/`, then `python manage.py build_station_data`.
