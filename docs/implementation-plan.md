@@ -804,7 +804,7 @@ and a small station fixture.
 - map page returns 200 and contains the form;
 - GET equals POST (only if GET ships).
 
-**Done when:** the endpoint works end to end against real OSRM locally (Dallas → Chicago), all mocked tests are green, and the map page renders Dallas → Chicago and New York → Los Angeles.
+**Done when:** ✅ (2026-10-30: real OSRM end to end, 588 offline tests green on 3.13–3.15, map page checked in a browser) the endpoint works end to end against real OSRM locally (Dallas → Chicago), all mocked tests are green, and the map page renders Dallas → Chicago and New York → Los Angeles.
 
 **As built (2026-10-30), changes from the inputs above:**
 

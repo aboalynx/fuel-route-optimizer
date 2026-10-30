@@ -36,3 +36,12 @@ def test_page_defaults_to_the_api_minimum_saving_and_shows_the_cheapest_cost(cli
     # The cheapest plan gets its own labelled row, so its stop count is never read as this plan's.
     assert 'row(list, "Cheapest possible"' in html
     assert "small stop" in html and "skipped, +" in html
+
+
+def test_an_error_clears_the_previous_result(client):
+    # Otherwise the old plan stays under the error box and looks like the answer to the new input.
+    html = client.get("/").content.decode()
+    show_error = html[html.index("function showError") :]
+    show_error = show_error[: show_error.index("\n  }\n")]
+    assert "clearResult()" in show_error
+    assert "function clearResult()" in html

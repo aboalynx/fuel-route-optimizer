@@ -109,7 +109,16 @@
     return body;
   }
 
+  function clearResult() {
+    if (layer) {
+      layer.remove();
+      layer = null;
+    }
+    summary.style.display = "none";
+  }
+
   function showError(message) {
+    clearResult();
     errorBox.textContent = message;
     errorBox.style.display = "block";
   }
