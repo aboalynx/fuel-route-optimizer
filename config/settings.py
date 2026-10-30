@@ -56,6 +56,9 @@ MIDDLEWARE = [
 
 ROOT_URLCONF = "config.urls"
 
+# `python manage.py test` runs the pytest suite (config/test_runner.py).
+TEST_RUNNER = "config.test_runner.PytestTestRunner"
+
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",

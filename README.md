@@ -47,6 +47,87 @@ fuel CSV                                 1. validate input
 FIRST USE: stations + KD-tree loaded into memory once (lazy, lru_cache)
 ```
 
+**Containers.** What runs where and what flows between them (all four diagrams, including the
+system context and the request-path components, are in [docs/architecture.md](docs/architecture.md)):
+
+```mermaid
+flowchart TB
+    browser["Browser<br/>[Map page + fetch()]"]
+    client["API client<br/>[Postman, curl]"]
+    maintainer["Maintainer"]
+
+    subgraph django["Django application (one process)"]
+        api["DRF API<br/>POST/GET /api/v1/route-plan/"]
+        web["Map page<br/>GET / (template + Leaflet)"]
+        admin["Django admin<br/>/admin/ (read-only station views)"]
+        cmd["Management command<br/>build_station_data"]
+        subgraph memory["In-process memory"]
+            sindex["Station index + KD-tree<br/>(lru_cache, built on first use)"]
+            pindex["Place index + KD-tree<br/>(lru_cache, built on first use)"]
+            rcache["Route cache<br/>(LocMem, 24 h, routes only)"]
+        end
+    end
+
+    db[("SQLite db.sqlite3<br/>FuelStation, FuelPrice<br/>(DATABASE_URL configurable)")]
+
+    subgraph files["Committed data files"]
+        fixture["stations/fixtures/stations.json"]
+        places["data/places/us_places.csv.gz"]
+        unmatched["data/reports/unmatched_cities.csv"]
+        overrides["data/overrides/*.csv<br/>(manual coordinates, rejected matches)"]
+    end
+
+    osrm["OSRM public demo<br/>[External]"]
+    csv["Price CSV + GeoNames US.txt"]
+
+    client -- "JSON over HTTP" --> api
+    browser -- "GET /" --> web
+    browser -- "fetch() POST JSON" --> api
+    api -- "read on every request<br/>(no DB query)" --> sindex
+    api -- "resolve City, ST / lat,lng" --> pindex
+    api -- "get / set route" --> rcache
+    api -- "1 HTTPS call on a cache miss" --> osrm
+    sindex -- "one SELECT per process,<br/>on first use" --> db
+    pindex -- "read once on first use" --> places
+    admin -- "SQL" --> db
+    maintainer -- "runs" --> cmd
+    csv -- "read" --> cmd
+    overrides -- "read" --> cmd
+    cmd -- "delete + insert in one transaction" --> db
+    cmd -- "rewrites (byte-identical)" --> fixture
+    cmd -- "rewrites" --> places
+    cmd -- "rewrites" --> unmatched
+    fixture -- "python manage.py loaddata stations<br/>(setup, never at request time)" --> db
+```
+
+**Data model.** Two tables; the place lookup for `"City, ST"` is a committed gzip file, not a table,
+and requests never query the database once the station index is built (one `SELECT` per process, on
+the first request):
+
+```mermaid
+erDiagram
+    FUEL_STATION ||--|{ FUEL_PRICE : "prices (on_delete CASCADE)"
+    FUEL_STATION {
+        IntegerField opis_id PK "OPIS Truckstop ID"
+        CharField name "max_length 120"
+        CharField address "max_length 200"
+        CharField city "max_length 80"
+        CharField state "max_length 2, indexed"
+        FloatField lat "null"
+        FloatField lng "null"
+        CharField geo_source "max_length 20; city_centroid, manual, osm (reserved)"
+        PositiveSmallIntegerField match_score "null; always null today"
+        DecimalField best_price "max_digits 12, decimal_places 8; minimum of the station's prices"
+    }
+    FUEL_PRICE {
+        BigAutoField id PK "assigned 1..N by the rebuild"
+        IntegerField station_id FK "-> FuelStation.opis_id"
+        IntegerField rack_id
+        CharField raw_name "max_length 120"
+        DecimalField price "max_digits 12, decimal_places 8"
+    }
+```
+
 **Why in memory?** The station index is small (6,620 stations, about 1–2 MB) and read-only, and it
 needs an in-memory spatial index (a KD-tree) to find the stations along a route quickly. Each server
 process therefore holds its own copy, built once on first use, and a search never queries the
@@ -336,6 +417,7 @@ Errors always have the body `{"error": {"code", "message", "details"}}`:
 
 ## Testing and quality
 
+- **Running them:** run `python -m pytest` (or `python manage.py test`, which runs the same pytest suite).
 - **Tests:** pytest with pytest-django. Unit tests cover every pure module; integration tests cover the pipeline and the API.
 - **No real network in tests.** Routing is mocked with respx and a saved OSRM sample.
 - **Coverage target:** 90%+ on `planner/` and `stations/pipeline/`, and 95%+ on the optimizer.
