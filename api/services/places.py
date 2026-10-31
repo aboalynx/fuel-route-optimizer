@@ -1,4 +1,5 @@
-"""Load the place lookup once per process (lazily, never in AppConfig.ready()).
+"""Load the place lookup once per process (at server start via api/services/warmup.py, else on first
+use; never in AppConfig.ready()).
 
 Tests reset it with get_place_index.cache_clear().
 """

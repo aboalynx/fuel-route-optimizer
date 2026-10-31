@@ -49,8 +49,8 @@ flowchart TB
         admin["Django admin<br/>/admin/ (read-only station views)"]
         cmd["Management command<br/>build_station_data"]
         subgraph memory["In-process memory"]
-            sindex["Station index + KD-tree<br/>(lru_cache, built on first use)"]
-            pindex["Place index + KD-tree<br/>(lru_cache, built on first use)"]
+            sindex["Station index + KD-tree<br/>(lru_cache, built at server start)"]
+            pindex["Place index + KD-tree<br/>(lru_cache, built at server start)"]
             rcache["Route cache<br/>(LocMem, 24 h, routes only)"]
         end
     end
@@ -74,8 +74,8 @@ flowchart TB
     api -- "resolve City, ST / lat,lng" --> pindex
     api -- "get / set route" --> rcache
     api -- "1 HTTPS call on a cache miss" --> osrm
-    sindex -- "one SELECT per process,<br/>on first use" --> db
-    pindex -- "read once on first use" --> places
+    sindex -- "one SELECT per process,<br/>at server start" --> db
+    pindex -- "read once at server start" --> places
     admin -- "SQL" --> db
     maintainer -- "runs" --> cmd
     csv -- "read" --> cmd
@@ -88,7 +88,7 @@ flowchart TB
 ```
 
 Everything runs in one Django process. The request path reads only in-memory structures. The station
-index is built from SQLite once per process on first use, and the place index once from the committed
+index is built from SQLite once per process at server start, and the place index once from the committed
 gzip file. The only network call is OSRM on a route-cache miss. The rebuild command is offline. It
 writes the database and the committed files in one go, and a fresh clone only needs `loaddata` to
 fill SQLite from the committed fixture.

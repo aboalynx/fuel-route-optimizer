@@ -44,7 +44,7 @@ fuel CSV                                 1. validate input
  -> report + fixture stations.json       6. optimizer: cheapest refuel plan (Decimal)
                                          7. GeoJSON + totals + timings + meta
 
-FIRST USE: stations + KD-tree loaded into memory once (lazy, lru_cache)
+SERVER START: stations + places + KD-trees loaded into memory once (lru_cache)
 ```
 
 **Containers.** What runs where and what flows between them (all four diagrams, including the
@@ -62,8 +62,8 @@ flowchart TB
         admin["Django admin<br/>/admin/ (read-only station views)"]
         cmd["Management command<br/>build_station_data"]
         subgraph memory["In-process memory"]
-            sindex["Station index + KD-tree<br/>(lru_cache, built on first use)"]
-            pindex["Place index + KD-tree<br/>(lru_cache, built on first use)"]
+            sindex["Station index + KD-tree<br/>(lru_cache, built at server start)"]
+            pindex["Place index + KD-tree<br/>(lru_cache, built at server start)"]
             rcache["Route cache<br/>(LocMem, 24 h, routes only)"]
         end
     end
@@ -87,8 +87,8 @@ flowchart TB
     api -- "resolve City, ST / lat,lng" --> pindex
     api -- "get / set route" --> rcache
     api -- "1 HTTPS call on a cache miss" --> osrm
-    sindex -- "one SELECT per process,<br/>on first use" --> db
-    pindex -- "read once on first use" --> places
+    sindex -- "one SELECT per process,<br/>at server start" --> db
+    pindex -- "read once at server start" --> places
     admin -- "SQL" --> db
     maintainer -- "runs" --> cmd
     csv -- "read" --> cmd
@@ -130,7 +130,7 @@ erDiagram
 
 **Why in memory?** The station index is small (6,620 stations, about 1–2 MB) and read-only, and it
 needs an in-memory spatial index (a KD-tree) to find the stations along a route quickly. Each server
-process therefore holds its own copy, built once on first use, and a search never queries the
+process therefore holds its own copy, built once when the process starts, and a search never queries the
 database. Redis was considered and rejected for this: every request would pay a network round-trip
 plus deserialization, and it adds infrastructure a reviewer would have to run.
 
@@ -170,7 +170,7 @@ cached route. Failures are never cached.
 - Dallas, TX → Chicago, IL routing call: 966.5 miles, 9,149 route points, 0.5–0.8 s.
 - Corridor search (10-mile radius) on that route: 202 candidate stations in 27 ms.
 - Corridor search on a synthetic 3,423-mile route (34,725 points): 327 candidates in 54 ms.
-- Station index: built once per process on first use, in about 0.1 s.
+- Station index: built once per process at server start, in about 0.1 s.
 - Refuelling plan on the 202 Dallas → Chicago candidates: 4 stops, $134.64, in 0.8 ms.
 - Refuelling plan on a synthetic 3,000-mile route with 400 stations: 1.2 ms.
 
@@ -178,7 +178,7 @@ cached route. Failures are never cached.
 
 | Request | Result | `routing_calls` | `timings_ms.total` |
 | --- | --- | --- | --- |
-| Dallas, TX → Chicago, IL with `min_saving_per_stop_usd: 0`, first request in a new process | 966.3 mi, 4 stops, $134.59 (the cheapest plan) | 1 | 1,288 (routing 734; first-use place index 390 and station index 162 included) |
+| Dallas, TX → Chicago, IL with `min_saving_per_stop_usd: 0`, first request in a new process | 966.3 mi, 4 stops, $134.59 (the cheapest plan) | 1 | 577 (routing 546; place and station indexes already loaded at server start) |
 | Same, repeated | identical plan | 0 (cached) | 64 (83 wall clock) |
 | Same with the default ($5) | 2 stops, $134.76 (+$0.17; the 4.2-gal and 1.3-gal stops skipped) | 0 | 64 |
 | New York, NY → Los Angeles, CA with `min_saving_per_stop_usd: 0` | 2,793.9 mi, 16 stops, $693.26 | 1 | 839 (routing 755) |

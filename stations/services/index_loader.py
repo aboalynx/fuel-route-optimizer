@@ -1,7 +1,8 @@
 """Load the station index once per process (the only place that reads stations for searching).
 
-Built lazily on first use, never in AppConfig.ready(). After build_station_data or loaddata,
-restart the process to pick up new data. Tests reset it with get_station_index.cache_clear().
+Built at server start (api/services/warmup.py), else on first use; never in AppConfig.ready().
+After build_station_data or loaddata, restart the process to pick up new data.
+Tests reset it with get_station_index.cache_clear().
 """
 
 import logging
